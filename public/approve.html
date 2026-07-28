@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homeroom - Approve User</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/api.js"></script>
+</head>
+<body data-theme="dark" class="auth-page">
+    <div class="auth-container">
+        <div class="auth-card glass-panel" id="approve-card" style="display: none;">
+            <div class="auth-header">
+                <div class="auth-logo">🏠 Homeroom</div>
+                <h2 class="auth-title">User Approval</h2>
+            </div>
+            
+            <div id="user-details" class="user-details-card">
+                <!-- User details injected here -->
+            </div>
+            
+            <div id="approve-message" class="message" style="display: none;"></div>
+            
+            <div class="form-row mt-4" id="action-buttons">
+                <button id="btn-approve" class="btn btn-success btn-full">✅ Approve</button>
+                <button id="btn-reject" class="btn btn-danger btn-full">❌ Reject</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="text-center mt-4">
+            <p>Loading...</p>
+        </div>
+        <div id="error-container" class="message error" style="display: none;"></div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            
+            const loading = document.getElementById('loading');
+            const card = document.getElementById('approve-card');
+            const errorContainer = document.getElementById('error-container');
+            const detailsDiv = document.getElementById('user-details');
+            const msgDiv = document.getElementById('approve-message');
+            const actionButtons = document.getElementById('action-buttons');
+            
+            if (!token) {
+                loading.style.display = 'none';
+                errorContainer.style.display = 'block';
+                errorContainer.textContent = 'Invalid or missing token.';
+                return;
+            }
+            
+            try {
+                const res = await Homeroom.API.get(`/approve/${token}`);
+                loading.style.display = 'none';
+                
+                if (res.success && res.data.user) {
+                    card.style.display = 'block';
+                    const u = res.data.user;
+                    detailsDiv.innerHTML = `
+                        <div class="text-center mb-3">
+                            <div class="avatar-large">${u.avatarEmoji || '🎓'}</div>
+                            <h3>${u.displayName}</h3>
+                            <p class="text-muted">@${u.username}</p>
+                        </div>
+                        <div class="details-list">
+                            <p><strong>Email:</strong> ${u.email}</p>
+                            <p><strong>Roll No:</strong> ${u.rollNumber || 'N/A'}</p>
+                            <p><strong>Bio:</strong> ${u.bio || 'N/A'}</p>
+                        </div>
+                    `;
+                } else {
+                    errorContainer.style.display = 'block';
+                    errorContainer.textContent = res.message || 'Failed to load user details.';
+                }
+            } catch (err) {
+                loading.style.display = 'none';
+                errorContainer.style.display = 'block';
+                errorContainer.textContent = 'Network error.';
+            }
+            
+            const handleAction = async (action) => {
+                actionButtons.style.display = 'none';
+                msgDiv.style.display = 'block';
+                msgDiv.className = 'message info';
+                msgDiv.textContent = 'Processing...';
+                
+                try {
+                    const res = await Homeroom.API.post(`/approve/${token}`, { action });
+                    if (res.success) {
+                        msgDiv.className = 'message success';
+                        msgDiv.textContent = res.message || `User successfully ${action}d.`;
+                    } else {
+                        msgDiv.className = 'message error';
+                        msgDiv.textContent = res.message || 'Action failed.';
+                        actionButtons.style.display = 'flex';
+                    }
+                } catch (err) {
+                    msgDiv.className = 'message error';
+                    msgDiv.textContent = 'Network error.';
+                    actionButtons.style.display = 'flex';
+                }
+            };
+            
+            document.getElementById('btn-approve').addEventListener('click', () => handleAction('approve'));
+            document.getElementById('btn-reject').addEventListener('click', () => handleAction('reject'));
+        });
+    </script>
+</body>
+</html>

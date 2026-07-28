@@ -1,0 +1,19 @@
+# Python / Virtual Environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# SQLite Database & Uploads
+homeroom.db
+uploads/*
+!uploads/.gitkeep
+
+# Environment / Secret Configuration
+config.json
+.env
+
+# System / IDE
+.DS_Store
+.vscode/
+.idea/

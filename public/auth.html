@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homeroom - Login & Signup</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="js/api.js"></script>
+</head>
+<body data-theme="dark" class="auth-page">
+    <div class="auth-container">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <div class="auth-logo">🏠 Homeroom</div>
+                <p class="auth-tagline">Your Class. One Digital Home.</p>
+            </div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">Login</button>
+                <button class="auth-tab" data-tab="signup">Sign Up</button>
+            </div>
+            
+            <div id="login-form" class="auth-form-container active">
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" required placeholder="student@school.edu">
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" required placeholder="••••••••">
+                    </div>
+                    <div id="login-error" class="message error" style="display: none;"></div>
+                    <button type="submit" class="btn btn-primary btn-full">Login</button>
+                </form>
+            </div>
+
+            <div id="signup-form" class="auth-form-container" style="display: none;">
+                <form id="signupForm">
+                    <div class="form-group">
+                        <label>Avatar</label>
+                        <div class="avatar-picker" id="avatar-picker">
+                            <!-- Emojis will be injected here -->
+                        </div>
+                        <input type="hidden" id="signup-avatar" value="🎓">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="signup-username">Username</label>
+                            <input type="text" id="signup-username" required placeholder="@handle">
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-display-name">Display Name</label>
+                            <input type="text" id="signup-display-name" required placeholder="John Doe">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-email">Email</label>
+                        <input type="email" id="signup-email" required placeholder="student@school.edu">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="signup-password">Password</label>
+                            <input type="password" id="signup-password" required placeholder="••••••••">
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-confirm-password">Confirm Password</label>
+                            <input type="password" id="signup-confirm-password" required placeholder="••••••••">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-roll">Roll Number (Optional)</label>
+                        <input type="text" id="signup-roll" placeholder="e.g. 2026-CS-001">
+                    </div>
+                    <div class="form-group">
+                        <label for="signup-bio">Bio</label>
+                        <textarea id="signup-bio" rows="2" placeholder="A little about yourself..."></textarea>
+                    </div>
+                    <div id="signup-message" class="message" style="display: none;"></div>
+                    <button type="submit" class="btn btn-primary btn-full">Sign Up</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('homeroom_token')) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            const tabs = document.querySelectorAll('.auth-tab');
+            const forms = {
+                login: document.getElementById('login-form'),
+                signup: document.getElementById('signup-form')
+            };
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    Object.values(forms).forEach(f => f.style.display = 'none');
+                    forms[tab.dataset.tab].style.display = 'block';
+                });
+            });
+
+            const emojis = ['🎓', '🤓', '👻', '👾', '🦊', '🐱', '🐶', '🦁', '🐼', '🐯', '🐸', '🦄', '🐝', '🦖', '🐙', '🥑', '🍕', '🚀', '⭐', '🔥'];
+            const picker = document.getElementById('avatar-picker');
+            const hiddenInput = document.getElementById('signup-avatar');
+            
+            emojis.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'emoji-btn' + (emoji === '🎓' ? ' selected' : '');
+                btn.textContent = emoji;
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    hiddenInput.value = emoji;
+                });
+                picker.appendChild(btn);
+            });
+
+            document.getElementById('loginForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('button');
+                const errorDiv = document.getElementById('login-error');
+                btn.disabled = true;
+                btn.textContent = 'Logging in...';
+                errorDiv.style.display = 'none';
+                
+                try {
+                    const email = document.getElementById('login-email').value;
+                    const password = document.getElementById('login-password').value;
+                    
+                    const res = await Homeroom.API.post('/auth/login', { email, password });
+                    
+                    if (res.success) {
+                        Homeroom.API.setToken(res.data.token);
+                        window.location.href = 'index.html';
+                    } else {
+                        errorDiv.style.display = 'block';
+                        if (res.message && res.message.includes('pending')) {
+                            errorDiv.innerHTML = 'Your account is pending approval.<br>Please wait for an admin to approve your request.';
+                            errorDiv.className = 'message info';
+                        } else {
+                            errorDiv.textContent = res.message || 'Login failed';
+                            errorDiv.className = 'message error';
+                        }
+                    }
+                } catch (err) {
+                    errorDiv.style.display = 'block';
+                    errorDiv.textContent = 'Network error. Please try again.';
+                    errorDiv.className = 'message error';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Login';
+                }
+            });
+
+            document.getElementById('signupForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('button');
+                const msgDiv = document.getElementById('signup-message');
+                
+                const password = document.getElementById('signup-password').value;
+                const confirm = document.getElementById('signup-confirm-password').value;
+                
+                if (password !== confirm) {
+                    msgDiv.style.display = 'block';
+                    msgDiv.textContent = 'Passwords do not match!';
+                    msgDiv.className = 'message error';
+                    return;
+                }
+                
+                btn.disabled = true;
+                btn.textContent = 'Signing up...';
+                msgDiv.style.display = 'none';
+                
+                try {
+                    const data = {
+                        username: document.getElementById('signup-username').value,
+                        displayName: document.getElementById('signup-display-name').value,
+                        email: document.getElementById('signup-email').value,
+                        password: password,
+                        rollNumber: document.getElementById('signup-roll').value,
+                        bio: document.getElementById('signup-bio').value,
+                        avatarEmoji: hiddenInput.value
+                    };
+                    
+                    const res = await Homeroom.API.post('/auth/signup', data);
+                    
+                    if (res.success) {
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = 'Account created! Waiting for admin approval. You will be notified when approved.';
+                        msgDiv.className = 'message success';
+                        e.target.reset();
+                    } else {
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = res.message || 'Signup failed';
+                        msgDiv.className = 'message error';
+                    }
+                } catch (err) {
+                    msgDiv.style.display = 'block';
+                    msgDiv.textContent = 'Network error. Please try again.';
+                    msgDiv.className = 'message error';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = 'Sign Up';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

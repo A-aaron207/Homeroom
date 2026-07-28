@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homeroom</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body data-theme="dark">
+    <!-- App Container -->
+    <div class="app-layout">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">🏠 Homeroom</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <span class="nav-section-title">── Main ──</span>
+                    <a href="#home" class="nav-item" data-page="home">🏠 Home</a>
+                    <a href="#notes" class="nav-item" data-page="notes">📚 Notes</a>
+                    <a href="#chats" class="nav-item" data-page="chats">💬 Chats</a>
+                    <a href="#qna" class="nav-item" data-page="qna">❓ Q&A</a>
+                    <a href="#community" class="nav-item" data-page="community">👥 Community</a>
+                </div>
+                
+                <div class="nav-section">
+                    <span class="nav-section-title">── Activity ──</span>
+                    <a href="#tasks" class="nav-item" data-page="tasks">📋 Tasks</a>
+                    <a href="#leaderboard" class="nav-item" data-page="leaderboard">🏆 Leaderboard</a>
+                </div>
+                
+                <div class="nav-section">
+                    <span class="nav-section-title">── Economy ──</span>
+                    <a href="#marketplace" class="nav-item" data-page="marketplace">🛒 Marketplace</a>
+                    <a href="#wallet" class="nav-item" data-page="wallet">💰 Wallet</a>
+                </div>
+                
+                <div class="nav-section">
+                    <span class="nav-section-title">── Personal ──</span>
+                    <a href="#profile" class="nav-item" data-page="profile">👤 Profile</a>
+                    <a href="#settings" class="nav-item" data-page="settings">⚙️ Settings</a>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-mini-profile" id="sidebar-user">
+                    <!-- Injected by app.js -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Area -->
+        <div class="main-wrapper">
+            <!-- Header -->
+            <header class="app-header glass-panel">
+                <button class="menu-toggle" id="menu-toggle">☰</button>
+                <div class="header-search">
+                    <input type="text" placeholder="Search..." id="global-search">
+                </div>
+                <div class="header-actions">
+                    <div class="coin-display" id="header-coins">⭐ 0 CC</div>
+                    <button class="notification-bell" id="btn-notifications">🔔</button>
+                    <div class="header-avatar" id="header-avatar"></div>
+                </div>
+            </header>
+
+            <!-- Main Content Area -->
+            <main id="main-content" class="content-area">
+                <!-- Page injected here -->
+            </main>
+        </div>
+        
+        <!-- Mobile Bottom Nav -->
+        <nav class="mobile-nav glass-panel">
+            <a href="#home" class="mobile-nav-item" data-page="home">🏠</a>
+            <a href="#notes" class="mobile-nav-item" data-page="notes">📚</a>
+            <a href="#chats" class="mobile-nav-item" data-page="chats">💬</a>
+            <a href="#tasks" class="mobile-nav-item" data-page="tasks">📋</a>
+            <a href="#profile" class="mobile-nav-item" data-page="profile">👤</a>
+            <button class="mobile-nav-item" id="mobile-menu-more">☰</button>
+        </nav>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Modal Container -->
+    <div id="modal-backdrop" class="modal-backdrop" style="display: none;">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3 id="modal-title">Modal Title</h3>
+                <button class="modal-close" id="modal-close">×</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/store.js"></script>
+    <script>window.Homeroom = window.Homeroom || {}; window.Homeroom.pages = {};</script>
+    <script src="js/pages/home.js"></script>
+    <script src="js/pages/notes.js"></script>
+    <script src="js/pages/chats.js"></script>
+    <script src="js/pages/qna.js"></script>
+    <script src="js/pages/community.js"></script>
+    <script src="js/pages/tasks.js"></script>
+    <script src="js/pages/leaderboard.js"></script>
+    <script src="js/pages/marketplace.js"></script>
+    <script src="js/pages/wallet.js"></script>
+    <script src="js/pages/profile.js"></script>
+    <script src="js/pages/settings.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
