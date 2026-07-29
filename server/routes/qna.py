@@ -5,7 +5,7 @@ from server.utils import award_xp, award_coins
 import uuid
 import json
 
-bp = Blueprint('qna', __name__, url_prefix='/api/qna')
+bp = Blueprint('qna', __name__, url_prefix='/api')
 
 @bp.route('/questions', methods=['GET'])
 @auth_required
@@ -16,7 +16,8 @@ def list_questions():
     
     db = get_db()
     query = '''
-        SELECT q.*, u.username, u.display_name, u.avatar_emoji, u.username_color 
+        SELECT q.*, u.username, u.display_name, u.display_name as asked_by_name, u.avatar_emoji, u.username_color,
+               (SELECT COUNT(*) FROM answers WHERE question_id = q.id AND is_best = 1) as best_answer_count
         FROM questions q
         JOIN users u ON q.asked_by = u.id
         WHERE 1=1
@@ -30,6 +31,9 @@ def list_questions():
     if search:
         query += ' AND (q.title LIKE ? OR q.content LIKE ?)'
         params.extend([f'%{search}%', f'%{search}%'])
+
+    if request.args.get('solved') == '1':
+        query += ' AND EXISTS (SELECT 1 FROM answers WHERE question_id = q.id AND is_best = 1)'
         
     if sort == 'popular':
         query += ' ORDER BY q.upvotes DESC, q.created_at DESC'
@@ -44,7 +48,7 @@ def list_questions():
     for q in questions:
         q_dict = dict(q)
         try:
-            q_dict['tags'] = json.loads(q_dict['tags'])
+            q_dict['tags'] = json.loads(q_dict['tags']) if isinstance(q_dict['tags'], str) else q_dict['tags']
         except:
             q_dict['tags'] = []
             
@@ -62,26 +66,43 @@ def list_questions():
 @bp.route('/questions', methods=['POST'])
 @auth_required
 def ask_question():
-    data = request.json
+    data = request.json or {}
     if not data.get('title') or not data.get('content'):
         return jsonify({'success': False, 'message': 'Title and content required'}), 400
         
+    raw_tags = data.get('tags', [])
+    if isinstance(raw_tags, str):
+        try:
+            parsed_tags = json.loads(raw_tags)
+        except:
+            parsed_tags = [t.strip() for t in raw_tags.split(',') if t.strip()]
+    elif isinstance(raw_tags, list):
+        parsed_tags = raw_tags
+    else:
+        parsed_tags = []
+        
+    tags_json = json.dumps(parsed_tags)
+
     q_id = str(uuid.uuid4())
     db = get_db()
     db.execute('''
         INSERT INTO questions (id, title, content, tags, subject, asked_by)
         VALUES (?, ?, ?, ?, ?, ?)
-    ''', (q_id, data['title'], data['content'], json.dumps(data.get('tags', [])), data.get('subject', ''), g.user['id']))
+    ''', (q_id, data['title'], data['content'], tags_json, data.get('subject', ''), g.user['id']))
+    
+    from server.utils import create_notification
+    create_notification(db, g.user['id'], 'question_asked', 'Question Posted! ❓', f'Your question "{data["title"]}" is live!')
+    
     db.commit()
     
-    return jsonify({'success': True, 'data': {'id': q_id}})
+    return jsonify({'success': True, 'message': 'Question posted successfully', 'data': {'id': q_id}})
 
 @bp.route('/questions/<id>', methods=['GET'])
 @auth_required
 def get_question(id):
     db = get_db()
     q = db.execute('''
-        SELECT q.*, u.username, u.display_name, u.avatar_emoji, u.username_color 
+        SELECT q.*, u.username, u.display_name, u.display_name as asked_by_name, u.avatar_emoji, u.username_color 
         FROM questions q
         JOIN users u ON q.asked_by = u.id
         WHERE q.id = ?
@@ -92,7 +113,7 @@ def get_question(id):
         
     q_dict = dict(q)
     try:
-        q_dict['tags'] = json.loads(q_dict['tags'])
+        q_dict['tags'] = json.loads(q_dict['tags']) if isinstance(q_dict['tags'], str) else q_dict['tags']
     except:
         q_dict['tags'] = []
         
@@ -110,7 +131,7 @@ def get_question(id):
     
     # Get answers
     answers = db.execute('''
-        SELECT a.*, u.username, u.display_name, u.avatar_emoji, u.username_color 
+        SELECT a.*, u.username, u.display_name, u.display_name as answered_by_name, u.avatar_emoji, u.username_color 
         FROM answers a
         JOIN users u ON a.answered_by = u.id
         WHERE a.question_id = ?
@@ -143,7 +164,7 @@ def answer_question(id):
         return jsonify({'success': False, 'message': 'Content required'}), 400
         
     db = get_db()
-    q = db.execute('SELECT id FROM questions WHERE id = ?', (id,)).fetchone()
+    q = db.execute('SELECT id, title, asked_by FROM questions WHERE id = ?', (id,)).fetchone()
     if not q:
         return jsonify({'success': False, 'message': 'Question not found'}), 404
         
@@ -155,8 +176,12 @@ def answer_question(id):
     award_coins(db, g.user['id'], 3, 'Answered a question')
     award_xp(db, g.user['id'], 5)
     
+    from server.utils import create_notification
+    if q['asked_by'] != g.user['id']:
+        create_notification(db, q['asked_by'], 'new_answer', 'New Answer! 💬', f'{g.user["display_name"]} answered your question "{q["title"]}"')
+    
     db.commit()
-    return jsonify({'success': True, 'data': {'id': a_id}})
+    return jsonify({'success': True, 'data': {'id': a_id}, 'message': 'Answer posted'})
 
 @bp.route('/questions/<id>/upvote', methods=['POST'])
 @auth_required
@@ -198,7 +223,7 @@ def best_answer(id):
     if not ans:
         return jsonify({'success': False, 'message': 'Answer not found'}), 404
         
-    q = db.execute('SELECT asked_by FROM questions WHERE id = ?', (ans['question_id'],)).fetchone()
+    q = db.execute('SELECT asked_by, title FROM questions WHERE id = ?', (ans['question_id'],)).fetchone()
     if q['asked_by'] != g.user['id']:
         return jsonify({'success': False, 'message': 'Only question author can mark best answer'}), 403
         
@@ -210,5 +235,9 @@ def best_answer(id):
     award_coins(db, ans['answered_by'], 15, 'Best answer marked')
     award_xp(db, ans['answered_by'], 20)
     
+    from server.utils import create_notification
+    create_notification(db, ans['answered_by'], 'best_answer', 'Best Answer! ⭐', f'Your answer for "{q["title"]}" was marked as the Best Answer (+15 CC)!')
+    
     db.commit()
     return jsonify({'success': True, 'message': 'Best answer marked'})
+

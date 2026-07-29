@@ -54,11 +54,15 @@ def get_user_profile(id):
     note_count = db.execute('SELECT COUNT(*) FROM notes WHERE uploaded_by = ?', (id,)).fetchone()[0]
     task_count = db.execute('SELECT COUNT(*) FROM task_submissions WHERE user_id = ? AND status = "approved"', (id,)).fetchone()[0]
     message_count = db.execute('SELECT COUNT(*) FROM messages WHERE sender_id = ?', (id,)).fetchone()[0]
+    answer_count = db.execute('SELECT COUNT(*) FROM answers WHERE answered_by = ?', (id,)).fetchone()[0]
+    question_count = db.execute('SELECT COUNT(*) FROM questions WHERE asked_by = ?', (id,)).fetchone()[0]
     
     user_dict['stats'] = {
         'notes': note_count,
         'tasks': task_count,
-        'messages': message_count
+        'messages': message_count,
+        'answers': answer_count,
+        'questions': question_count
     }
     
     return jsonify({'success': True, 'data': user_dict})
@@ -66,18 +70,32 @@ def get_user_profile(id):
 @bp.route('/me', methods=['PUT'])
 @auth_required
 def update_profile():
-    data = request.json
+    data = request.json or {}
     db = get_db()
     
-    updatable_fields = ['displayName', 'bio', 'avatarEmoji', 'avatarBg', 'theme']
-    db_fields = ['display_name', 'bio', 'avatar_emoji', 'avatar_bg', 'theme']
+    mapping = {
+        'displayName': 'display_name',
+        'display_name': 'display_name',
+        'bio': 'bio',
+        'avatarEmoji': 'avatar_emoji',
+        'avatar_emoji': 'avatar_emoji',
+        'avatarBg': 'avatar_bg',
+        'avatar_bg': 'avatar_bg',
+        'theme': 'theme',
+        'rollNumber': 'roll_number',
+        'roll_number': 'roll_number'
+    }
     
     updates = []
     values = []
-    for i, field in enumerate(updatable_fields):
-        if field in data:
-            updates.append(f'{db_fields[i]} = ?')
-            values.append(data[field])
+    seen_db_fields = set()
+    
+    for key, value in data.items():
+        if key in mapping and mapping[key] not in seen_db_fields:
+            db_field = mapping[key]
+            updates.append(f'{db_field} = ?')
+            values.append(value)
+            seen_db_fields.add(db_field)
             
     if not updates:
         return jsonify({'success': False, 'message': 'No valid fields to update'}), 400
@@ -91,4 +109,8 @@ def update_profile():
     ''', values)
     db.commit()
     
-    return jsonify({'success': True, 'message': 'Profile updated'})
+    updated_user = db.execute('SELECT * FROM users WHERE id = ?', (g.user['id'],)).fetchone()
+    
+    from server.utils import format_user
+    return jsonify({'success': True, 'message': 'Profile updated', 'data': {'user': format_user(updated_user)}})
+

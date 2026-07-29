@@ -21,6 +21,129 @@ const App = {
         
         Homeroom.store.loadWallet();
         this.checkinDaily();
+        
+        this.loadNotifications();
+        setInterval(() => this.loadNotifications(), 6000);
+    },
+    
+    async loadNotifications() {
+        try {
+            const res = await Homeroom.API.get('/notifications');
+            if (res.success && res.data) {
+                const badge = document.getElementById('notif-badge');
+                const unread = res.data.unread_count || 0;
+                if (badge) {
+                    if (unread > 0) {
+                        badge.textContent = unread > 99 ? '99+' : unread;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+            }
+        } catch(e) {}
+    },
+
+    async openNotificationsModal() {
+        Homeroom.modal.open('Notifications', '<div style="text-align:center; padding:2rem;"><div class="spinner"></div></div>');
+        try {
+            const res = await Homeroom.API.get('/notifications');
+            if (!res.success) throw new Error();
+            
+            const list = res.data.notifications || [];
+            if (list.length === 0) {
+                Homeroom.modal.open('Notifications', '<div style="text-align:center; padding:3rem; color:var(--text-muted);"><div style="font-size:3rem;">🔔</div><p>No notifications yet</p></div>');
+                return;
+            }
+            
+            const notifHTML = list.map(n => `
+                <div style="padding: 1rem; border-radius: 0.5rem; background: ${n.is_read ? 'rgba(0,0,0,0.1)' : 'rgba(99,102,241,0.1)'}; border-left: 4px solid ${n.is_read ? 'transparent' : 'var(--accent-color)'}; margin-bottom: 0.75rem;">
+                    <div style="font-weight: bold; font-size: 0.95rem; color: var(--text-color);">${n.title}</div>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">${n.message}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; margin-top: 0.5rem;">${new Date(n.created_at).toLocaleString()}</div>
+                </div>
+            `).join('');
+
+            Homeroom.modal.open('Notifications', `
+                <div style="max-height: 400px; overflow-y: auto;">${notifHTML}</div>
+            `, `
+                <button id="btn-mark-all-notifs" class="btn btn-premium" style="width: 100%; padding: 0.75rem;">Mark All as Read</button>
+            `);
+
+            document.getElementById('btn-mark-all-notifs')?.addEventListener('click', async () => {
+                await Homeroom.API.post('/notifications/read-all');
+                Homeroom.toast('All notifications marked as read', 'success');
+                this.loadNotifications();
+                Homeroom.modal.close();
+            });
+
+            // Mark as read in backend
+            await Homeroom.API.post('/notifications/read-all');
+            this.loadNotifications();
+        } catch(e) {
+            Homeroom.toast('Failed to load notifications', 'error');
+        }
+    },
+
+    bindGlobalSearch() {
+        const input = document.getElementById('global-search');
+        if (!input) return;
+        
+        let timeout;
+        input.addEventListener('input', (e) => {
+            clearTimeout(timeout);
+            const query = e.target.value.trim();
+            if (query.length < 2) return;
+
+            timeout = setTimeout(async () => {
+                const res = await Homeroom.API.get(`/search?q=${encodeURIComponent(query)}`);
+                if (res.success && res.data) {
+                    this.renderSearchResults(res.data);
+                }
+            }, 350);
+        });
+    },
+
+    renderSearchResults(data) {
+        const { query, notes, questions, users } = data;
+        const total = (notes.length || 0) + (questions.length || 0) + (users.length || 0);
+
+        if (total === 0) {
+            Homeroom.modal.open(`Search: "${query}"`, `<div style="text-align:center; padding: 2rem; color: var(--text-muted);">No results found for "${query}"</div>`);
+            return;
+        }
+
+        const notesHTML = notes.map(n => `
+            <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;" onclick="Homeroom.modal.close(); location.hash='#notes'; setTimeout(()=>Homeroom.pages.notes.openNote('${n.id}'), 300)">
+                <div style="font-weight: bold; color: var(--accent-color);">📄 ${n.title}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">${n.subject} • By ${n.author_name}</div>
+            </div>
+        `).join('');
+
+        const questionsHTML = questions.map(q => `
+            <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;" onclick="Homeroom.modal.close(); location.hash='#qna'; setTimeout(()=>Homeroom.pages.qna.openQuestion('${q.id}'), 300)">
+                <div style="font-weight: bold; color: #8b5cf6;">❓ ${q.title}</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted);">${q.subject} • ${q.answer_count} Answers</div>
+            </div>
+        `).join('');
+
+        const usersHTML = users.map(u => `
+            <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                <div style="font-size: 1.5rem;">${u.avatar_emoji || '🎓'}</div>
+                <div>
+                    <div style="font-weight: bold; color: var(--text-color);">${u.display_name} (@${u.username})</div>
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">${u.bio || 'Classmate'}</div>
+                </div>
+            </div>
+        `).join('');
+
+        Homeroom.modal.open(`Search Results for "${query}"`, `
+            <div style="max-height: 450px; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;">
+                ${notes.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Notes (${notes.length})</h4>${notesHTML}</div>` : ''}
+                ${questions.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Q&A Questions (${questions.length})</h4>${questionsHTML}</div>` : ''}
+                ${users.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Classmates (${users.length})</h4>${usersHTML}</div>` : ''}
+            </div>
+        `);
     },
     
     async checkinDaily() {
@@ -47,9 +170,9 @@ const App = {
         const sidebarUser = document.getElementById('sidebar-user');
         if (sidebarUser) {
             sidebarUser.innerHTML = `
-                <div class="avatar">${u.avatarEmoji || '🎓'}</div>
+                <div class="avatar">${u.avatarEmoji || u.avatar_emoji || '🎓'}</div>
                 <div class="user-info">
-                    <div class="display-name ${u.username_color || ''}">${u.displayName}</div>
+                    <div class="display-name ${u.username_color || ''}">${u.displayName || u.display_name}</div>
                     <div class="level">Lvl ${this.calculateLevel(u.xp)}</div>
                 </div>
             `;
@@ -57,7 +180,7 @@ const App = {
         
         const headerAvatar = document.getElementById('header-avatar');
         if (headerAvatar) {
-            headerAvatar.textContent = u.avatarEmoji || '🎓';
+            headerAvatar.textContent = u.avatarEmoji || u.avatar_emoji || '🎓';
         }
         
         this.updateCoins();
@@ -91,6 +214,40 @@ const App = {
                 sidebar.classList.toggle('active');
             });
         }
+
+        // FAB Speed Dial
+        const fabMain = document.getElementById('fab-main');
+        const fabContainer = document.getElementById('fab-container');
+        if (fabMain && fabContainer) {
+            fabMain.addEventListener('click', (e) => {
+                e.stopPropagation();
+                fabContainer.classList.toggle('active');
+            });
+            document.addEventListener('click', (e) => {
+                if (!fabContainer.contains(e.target)) {
+                    fabContainer.classList.remove('active');
+                }
+            });
+        }
+
+        // Mobile Pull-to-refresh
+        let touchStart = 0;
+        const main = document.getElementById('main-content');
+        if (main) {
+            main.addEventListener('touchstart', (e) => {
+                if (main.scrollTop === 0) touchStart = e.touches[0].clientY;
+            }, { passive: true });
+            main.addEventListener('touchend', (e) => {
+                const touchEnd = e.changedTouches[0].clientY;
+                if (main.scrollTop === 0 && touchEnd - touchStart > 120) {
+                    Homeroom.toast('🔄 Refreshing...', 'info', 1500);
+                    this.navigate();
+                }
+            }, { passive: true });
+        }
+
+        document.getElementById('btn-notifications')?.addEventListener('click', () => this.openNotificationsModal());
+        this.bindGlobalSearch();
         
         document.getElementById('modal-close')?.addEventListener('click', () => Homeroom.modal.close());
         document.getElementById('modal-backdrop')?.addEventListener('click', (e) => {

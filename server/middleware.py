@@ -22,8 +22,8 @@ def auth_required(f):
             if not user:
                 return jsonify({'success': False, 'message': 'User not found'}), 401
 
-            if user['status'] != 'approved':
-                return jsonify({'success': False, 'message': 'Account not approved yet'}), 401
+            if dict(user).get('status') == 'rejected':
+                return jsonify({'success': False, 'message': 'Account is suspended or rejected'}), 401
 
             g.user = user
         except jwt.ExpiredSignatureError:

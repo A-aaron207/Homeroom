@@ -5,9 +5,9 @@ from server.utils import award_coins, award_xp
 import uuid
 import datetime
 
-bp = Blueprint('tasks', __name__, url_prefix='/api/tasks')
+bp = Blueprint('tasks', __name__, url_prefix='/api')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/tasks', methods=['GET'])
 @auth_required
 def list_tasks():
     db = get_db()
@@ -23,7 +23,7 @@ def list_tasks():
         
     return jsonify({'success': True, 'data': result})
 
-@bp.route('/', methods=['POST'])
+@bp.route('/tasks', methods=['POST'])
 @admin_required
 def create_task():
     data = request.json
@@ -42,7 +42,7 @@ def create_task():
     
     return jsonify({'success': True, 'data': {'id': t_id}})
 
-@bp.route('/<id>/submit', methods=['POST'])
+@bp.route('/tasks/<id>/submit', methods=['POST'])
 @auth_required
 def submit_task(id):
     proof = request.json.get('proof', '')
@@ -62,7 +62,7 @@ def submit_task(id):
     
     return jsonify({'success': True, 'data': {'id': sub_id}})
 
-@bp.route('/<id>/submissions', methods=['GET'])
+@bp.route('/tasks/<id>/submissions', methods=['GET'])
 @admin_required
 def list_submissions(id):
     db = get_db()

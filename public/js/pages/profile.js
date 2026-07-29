@@ -81,6 +81,13 @@ Homeroom.pages.profile = {
             try {
                 const res = await Homeroom.API.put('/users/me', data);
                 if(res.success) {
+                    if (res.data && res.data.user) {
+                        Homeroom.auth.user = res.data.user;
+                        Homeroom.store.currentUser = res.data.user;
+                        if (window.App && window.App.updateHeaderAndSidebar) {
+                            window.App.updateHeaderAndSidebar();
+                        }
+                    }
                     Homeroom.toast('Profile updated!', 'success');
                     Homeroom.modal.close();
                     this.loadProfile();

@@ -1,27 +1,37 @@
 import os
+import sys
 import json
 import importlib
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 
+socketio = None
 
 def create_app():
-    """Create and configure the Flask application."""
+    """Create and configure the Flask application with SocketIO support."""
+    global socketio
+
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     public_dir = os.path.join(base_dir, 'public')
 
     app = Flask(__name__, static_folder=public_dir, static_url_path='')
+    app.url_map.strict_slashes = False
 
     # Default config
     app.config.update(
-        SECRET_KEY='homeroom-secret-key-change-in-production',
-        ADMIN_EMAIL='',
-        GMAIL_USER='',
-        GMAIL_APP_PASSWORD='',
-        SERVER_URL='http://localhost:5000',
+        SECRET_KEY=os.environ.get('SECRET_KEY', 'homeroom-secret-key-change-in-production'),
+        ADMIN_EMAIL=os.environ.get('ADMIN_EMAIL', 'aaronsaha.22@gmail.com'),
+        GMAIL_USER=os.environ.get('GMAIL_USER', ''),
+        GMAIL_APP_PASSWORD=os.environ.get('GMAIL_APP_PASSWORD', ''),
+        SERVER_URL=os.environ.get('SERVER_URL', 'http://localhost:5000'),
         DB_PATH=os.path.join(base_dir, 'homeroom.db'),
         UPLOAD_FOLDER=os.path.join(base_dir, 'uploads'),
         MAX_FILE_SIZE=10 * 1024 * 1024,
-        MAX_CONTENT_LENGTH=10 * 1024 * 1024
+        MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+        R2_ACCOUNT_ID=os.environ.get('R2_ACCOUNT_ID', ''),
+        R2_ACCESS_KEY_ID=os.environ.get('R2_ACCESS_KEY_ID', ''),
+        R2_SECRET_ACCESS_KEY=os.environ.get('R2_SECRET_ACCESS_KEY', ''),
+        R2_BUCKET_NAME=os.environ.get('R2_BUCKET_NAME', 'homeroom'),
+        R2_PUBLIC_DOMAIN=os.environ.get('R2_PUBLIC_DOMAIN', '')
     )
 
     # Load config from config.json if present
@@ -49,6 +59,16 @@ def create_app():
     from server.database import init_db
     init_db(app)
 
+    # Initialize Flask-SocketIO
+    try:
+        from flask_socketio import SocketIO
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode=None)
+        app.config['SOCKETIO'] = socketio
+        print("  SocketIO initialized")
+    except ImportError:
+        socketio = None
+        print("  Notice: flask_socketio not installed, falling back to HTTP")
+
     # Auto-register all route blueprints
     routes_dir = os.path.join(os.path.dirname(__file__), 'routes')
     if os.path.exists(routes_dir):
@@ -63,6 +83,11 @@ def create_app():
                 except Exception as e:
                     print(f"  Warning: Could not load route {module_name}: {e}")
 
+    # Serve static uploads fallback
+    @app.route('/uploads/<path:filename>')
+    def serve_upload(filename):
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
     # Serve frontend pages
     @app.route('/')
     def serve_index():
@@ -76,4 +101,12 @@ def create_app():
     def serve_approve():
         return app.send_static_file('approve.html')
 
+    @app.route('/healthz')
+    def health_check():
+        return jsonify({'status': 'healthy'}), 200
+
     return app
+
+
+# WSGI entry point
+app = create_app()

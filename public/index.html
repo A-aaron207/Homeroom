@@ -65,7 +65,7 @@
                 </div>
                 <div class="header-actions">
                     <div class="coin-display" id="header-coins">⭐ 0 CC</div>
-                    <button class="notification-bell" id="btn-notifications">🔔</button>
+                    <button class="notification-bell" id="btn-notifications" style="position: relative; cursor: pointer;">🔔<span id="notif-badge" style="display: none; position: absolute; top: -4px; right: -4px; background: #ef4444; color: white; border-radius: 10px; font-size: 0.65rem; padding: 1px 5px; font-weight: bold; min-width: 16px; text-align: center;">0</span></button>
                     <div class="header-avatar" id="header-avatar"></div>
                 </div>
             </header>
@@ -87,6 +87,24 @@
         </nav>
     </div>
 
+    <!-- Floating Action Button (FAB) Speed Dial -->
+    <div class="fab-container" id="fab-container">
+        <div class="fab-menu" id="fab-menu">
+            <button class="fab-action" onclick="document.getElementById('fab-container').classList.remove('active'); location.hash='#qna'; setTimeout(()=>document.getElementById('btn-ask-q')?.click(), 300);">
+                <span>❓</span> Ask Question
+            </button>
+            <button class="fab-action" onclick="document.getElementById('fab-container').classList.remove('active'); location.hash='#notes'; setTimeout(()=>document.getElementById('btn-upload-note')?.click(), 300);">
+                <span>📄</span> Upload Note
+            </button>
+            <button class="fab-action" onclick="document.getElementById('fab-container').classList.remove('active'); location.hash='#chats'; setTimeout(()=>document.getElementById('btn-new-chat')?.click(), 300);">
+                <span>💬</span> New Chat
+            </button>
+        </div>
+        <button class="fab-main" id="fab-main" title="Quick Actions">
+            <span class="fab-icon">➕</span>
+        </button>
+    </div>
+
     <!-- Toast Container -->
     <div id="toast-container"></div>
 
@@ -105,6 +123,7 @@
     <!-- Scripts -->
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
+    <script src="js/offline_db.js"></script>
     <script src="js/store.js"></script>
     <script>window.Homeroom = window.Homeroom || {}; window.Homeroom.pages = {};</script>
     <script src="js/pages/home.js"></script>

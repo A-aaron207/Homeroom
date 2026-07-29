@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
     '/css/styles.css',
     '/js/api.js',
     '/js/auth.js',
+    '/js/offline_db.js',
     '/js/store.js',
     '/js/app.js',
     'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'

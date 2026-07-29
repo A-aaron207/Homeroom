@@ -4,12 +4,12 @@ from email.mime.multipart import MIMEMultipart
 
 
 def send_approval_email(user_data, approval_token, server_url, config):
-    """Send an approval email to the admin with user signup details."""
-    admin_email = config.get('ADMIN_EMAIL')
+    """Send an approval consent email to the admin with user signup details."""
+    admin_email = config.get('ADMIN_EMAIL') or 'aaronsaha.22@gmail.com'
     gmail_user = config.get('GMAIL_USER')
     gmail_password = config.get('GMAIL_APP_PASSWORD')
 
-    approve_link = f"{server_url}/approve.html?token={approval_token}"
+    consent_page_url = f"{server_url}/approve.html?token={approval_token}"
 
     display_name = user_data.get('display_name', 'Unknown')
     username = user_data.get('username', '')
@@ -21,11 +21,11 @@ def send_approval_email(user_data, approval_token, server_url, config):
     html_content = f"""
     <html>
     <body style="font-family: 'Inter', Arial, sans-serif; background-color: #0c0c22; margin: 0; padding: 40px 20px;">
-        <div style="max-width: 500px; margin: 0 auto; background: linear-gradient(135deg, #1a1a3a, #13132e); padding: 40px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.06); box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
-            <div style="text-align: center; margin-bottom: 30px;">
+        <div style="max-width: 520px; margin: 0 auto; background: linear-gradient(135deg, #1a1a3a, #13132e); padding: 40px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 8px 32px rgba(0,0,0,0.5);">
+            <div style="text-align: center; margin-bottom: 25px;">
                 <div style="font-size: 48px; margin-bottom: 10px;">🏠</div>
-                <h1 style="color: #6366f1; margin: 0; font-size: 28px;">Homeroom</h1>
-                <p style="color: #9494b8; margin: 5px 0 0 0; font-size: 14px;">New Student Signup Request</p>
+                <h1 style="color: #6366f1; margin: 0; font-size: 26px;">Homeroom Account Consent Request</h1>
+                <p style="color: #9494b8; margin: 5px 0 0 0; font-size: 14px;">Profile creation permission requested</p>
             </div>
 
             <div style="background: rgba(22, 22, 55, 0.65); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 24px;">
@@ -41,14 +41,14 @@ def send_approval_email(user_data, approval_token, server_url, config):
                 </table>
             </div>
 
-            <div style="text-align: center;">
-                <a href="{approve_link}" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; padding: 14px 32px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 16px; display: inline-block;">
-                    Review Application →
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="{consent_page_url}" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 15px; display: inline-block;">
+                    Open Consent Page (Accept / Reject Profile) →
                 </a>
             </div>
 
             <p style="margin-top: 30px; font-size: 12px; color: #5a5a80; text-align: center;">
-                Homeroom — Your Class. One Digital Home.
+                Sent to {admin_email} for student verification.
             </p>
         </div>
     </body>

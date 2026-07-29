@@ -12,17 +12,21 @@ bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 @bp.route('/signup', methods=['POST'])
 def signup():
     data = request.json
-    required_fields = ['username', 'displayName', 'email', 'password']
+    required_fields = ['username', 'displayName', 'password']
     for field in required_fields:
-        if field not in data:
+        if not data.get(field):
             return jsonify({'success': False, 'message': f'Missing {field}'}), 400
     
+    username = data['username'].strip().lower()
+    if username.startswith('@'):
+        username = username[1:]
+        
     db = get_db()
     
-    # Check if username or email exists
-    existing = db.execute('SELECT * FROM users WHERE username = ? OR email = ?', (data['username'], data['email'])).fetchone()
+    # Check if username exists
+    existing = db.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
     if existing:
-        return jsonify({'success': False, 'message': 'Username or email already exists'}), 409
+        return jsonify({'success': False, 'message': 'Username is already taken'}), 409
 
     user_id = str(uuid.uuid4())
     password_hash = generate_password_hash(data['password'])
@@ -34,23 +38,36 @@ def signup():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             user_id,
-            data['username'],
+            username,
             data['displayName'],
-            data['email'],
+            data.get('email', ''),
             password_hash,
             data.get('rollNumber', ''),
             data.get('bio', ''),
             data.get('avatarEmoji', '🎓'),
-            'pending',
+            'approved',
             approval_token
         ))
         db.commit()
         
-        # Here we would send the approval email to admin using current_app.config['ADMIN_EMAIL']
-        # from server.email_service import send_approval_email
-        # send_approval_email(data['displayName'], approval_token)
+        # Generate JWT token for instant login
+        token = jwt.encode({
+            'sub': user_id,
+            'user_id': user_id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+        }, current_app.config['SECRET_KEY'], algorithm='HS256')
         
-        return jsonify({'success': True, 'message': 'Account created. Waiting for admin approval.'})
+        user_row = db.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        user_dict = format_user(user_row)
+
+        return jsonify({
+            'success': True,
+            'message': 'Account created successfully!',
+            'data': {
+                'token': token,
+                'user': user_dict
+            }
+        })
     except Exception as e:
         db.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -58,17 +75,24 @@ def signup():
 @bp.route('/login', methods=['POST'])
 def login():
     data = request.json
-    if 'email' not in data or 'password' not in data:
-        return jsonify({'success': False, 'message': 'Missing email or password'}), 400
-        
-    db = get_db()
-    user = db.execute('SELECT * FROM users WHERE email = ?', (data['email'],)).fetchone()
+    identifier = data.get('username') or data.get('email')
+    password = data.get('password')
     
-    if not user or not check_password_hash(user['password_hash'], data['password']):
-        return jsonify({'success': False, 'message': 'Invalid credentials'}), 401
+    if not identifier or not password:
+        return jsonify({'success': False, 'message': 'Missing username or password'}), 400
         
-    if user['status'] != 'approved':
-        return jsonify({'success': False, 'message': 'Account is not approved yet'}), 403
+    identifier = identifier.strip().lower()
+    if identifier.startswith('@'):
+        identifier = identifier[1:]
+
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE username = ? OR (email != "" AND email = ?)', (identifier, identifier)).fetchone()
+    
+    if not user or not check_password_hash(user['password_hash'], password):
+        return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
+        
+    if dict(user).get('status') == 'rejected':
+        return jsonify({'success': False, 'message': 'Account is suspended or rejected'}), 403
         
     # Update last login
     db.execute('UPDATE users SET last_login_date = ? WHERE id = ?', (datetime.datetime.utcnow().isoformat(), user['id']))
@@ -76,13 +100,12 @@ def login():
     
     # Generate JWT
     token = jwt.encode({
+        'sub': user['id'],
         'user_id': user['id'],
         'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
     }, current_app.config['SECRET_KEY'], algorithm='HS256')
     
-    user_dict = dict(user)
-    del user_dict['password_hash']
-    del user_dict['approval_token']
+    user_dict = format_user(user)
     
     return jsonify({
         'success': True,
@@ -100,15 +123,30 @@ def me():
     if not user:
         return jsonify({'success': False, 'message': 'User not found'}), 404
         
-    user_dict = dict(user)
-    del user_dict['password_hash']
-    del user_dict['approval_token']
-    
-    # Calculate level
-    user_level = 1
-    for lvl in LEVELS:
-        if user['xp'] >= lvl['min_xp']:
-            user_level = lvl['level']
-    user_dict['level'] = user_level
-    
+    user_dict = format_user(user)
     return jsonify({'success': True, 'data': {'user': user_dict}})
+
+
+@bp.route('/refresh', methods=['POST'])
+@auth_required
+def refresh_token():
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE id = ?', (g.user['id'],)).fetchone()
+    if not user:
+        return jsonify({'success': False, 'message': 'User not found'}), 404
+
+    new_token = jwt.encode({
+        'sub': user['id'],
+        'user_id': user['id'],
+        'exp': datetime.datetime.utcnow() + datetime.timedelta(days=30)
+    }, current_app.config['SECRET_KEY'], algorithm='HS256')
+
+    return jsonify({
+        'success': True,
+        'message': 'Token refreshed',
+        'data': {
+            'token': new_token,
+            'user': format_user(user)
+        }
+    })
+

@@ -209,3 +209,17 @@ def format_user(row):
 
     d['level_info'] = get_user_progress(d.get('xp', 0))
     return d
+
+
+def create_notification(db, user_id, notif_type, title, message, link=''):
+    """Create an in-app notification for a user."""
+    if not user_id:
+        return None
+    notif_id = generate_id()
+    db.execute(
+        'INSERT INTO notifications (id, user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?, ?)',
+        (notif_id, user_id, notif_type, title, message, link)
+    )
+    db.commit()
+    return notif_id
+

@@ -16,8 +16,8 @@ def get_wallet():
     # Transactions
     transactions = db.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC', (g.user['id'],)).fetchall()
     
-    total_earned = sum(t['amount'] for t in transactions if t['type'] == 'income')
-    total_spent = sum(t['amount'] for t in transactions if t['type'] == 'expense')
+    total_earned = sum(t['amount'] for t in transactions if t['type'] == 'earned')
+    total_spent = sum(t['amount'] for t in transactions if t['type'] == 'spent')
     
     # Wealth rank
     rank = db.execute('SELECT COUNT(*) + 1 FROM users WHERE status = "approved" AND coins > ?', (user['coins'],)).fetchone()[0]
@@ -61,12 +61,12 @@ def transfer():
     # Deduct from sender
     db.execute('UPDATE users SET coins = coins - ? WHERE id = ?', (amount, g.user['id']))
     db.execute('INSERT INTO transactions (id, user_id, type, amount, description, category) VALUES (?, ?, ?, ?, ?, ?)',
-               (str(uuid.uuid4()), g.user['id'], 'expense', amount, f"Transfer to {recipient['display_name']}: {reason}", "transfer"))
+               (str(uuid.uuid4()), g.user['id'], 'spent', amount, f"Transfer to {recipient['display_name']}: {reason}", "transfer"))
                
     # Add to recipient
     db.execute('UPDATE users SET coins = coins + ? WHERE id = ?', (amount, recipient['id']))
     db.execute('INSERT INTO transactions (id, user_id, type, amount, description, category) VALUES (?, ?, ?, ?, ?, ?)',
-               (str(uuid.uuid4()), recipient['id'], 'income', amount, f"Transfer from {sender['display_name']}: {reason}", "transfer"))
+               (str(uuid.uuid4()), recipient['id'], 'earned', amount, f"Transfer from {sender['display_name']}: {reason}", "transfer"))
                
     db.commit()
     

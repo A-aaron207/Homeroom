@@ -26,8 +26,8 @@
             <div id="login-form" class="auth-form-container active">
                 <form id="loginForm">
                     <div class="form-group">
-                        <label for="login-email">Email</label>
-                        <input type="email" id="login-email" required placeholder="student@school.edu">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" required placeholder="@username">
                     </div>
                     <div class="form-group">
                         <label for="login-password">Password</label>
@@ -56,10 +56,6 @@
                             <label for="signup-display-name">Display Name</label>
                             <input type="text" id="signup-display-name" required placeholder="John Doe">
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="signup-email">Email</label>
-                        <input type="email" id="signup-email" required placeholder="student@school.edu">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -134,23 +130,18 @@
                 errorDiv.style.display = 'none';
                 
                 try {
-                    const email = document.getElementById('login-email').value;
+                    const username = document.getElementById('login-username').value;
                     const password = document.getElementById('login-password').value;
                     
-                    const res = await Homeroom.API.post('/auth/login', { email, password });
+                    const res = await Homeroom.API.post('/auth/login', { username, password });
                     
                     if (res.success) {
                         Homeroom.API.setToken(res.data.token);
                         window.location.href = 'index.html';
                     } else {
                         errorDiv.style.display = 'block';
-                        if (res.message && res.message.includes('pending')) {
-                            errorDiv.innerHTML = 'Your account is pending approval.<br>Please wait for an admin to approve your request.';
-                            errorDiv.className = 'message info';
-                        } else {
-                            errorDiv.textContent = res.message || 'Login failed';
-                            errorDiv.className = 'message error';
-                        }
+                        errorDiv.textContent = res.message || 'Login failed';
+                        errorDiv.className = 'message error';
                     }
                 } catch (err) {
                     errorDiv.style.display = 'block';
@@ -185,7 +176,6 @@
                     const data = {
                         username: document.getElementById('signup-username').value,
                         displayName: document.getElementById('signup-display-name').value,
-                        email: document.getElementById('signup-email').value,
                         password: password,
                         rollNumber: document.getElementById('signup-roll').value,
                         bio: document.getElementById('signup-bio').value,
@@ -194,11 +184,9 @@
                     
                     const res = await Homeroom.API.post('/auth/signup', data);
                     
-                    if (res.success) {
-                        msgDiv.style.display = 'block';
-                        msgDiv.textContent = 'Account created! Waiting for admin approval. You will be notified when approved.';
-                        msgDiv.className = 'message success';
-                        e.target.reset();
+                    if (res.success && res.data && res.data.token) {
+                        Homeroom.API.setToken(res.data.token);
+                        window.location.href = 'index.html';
                     } else {
                         msgDiv.style.display = 'block';
                         msgDiv.textContent = res.message || 'Signup failed';

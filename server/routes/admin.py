@@ -3,7 +3,7 @@ from server.database import get_db
 from server.middleware import auth_required, admin_required
 import uuid
 
-bp = Blueprint('admin', __name__, url_prefix='/api/admin')
+bp = Blueprint('admin', __name__, url_prefix='/api')
 
 @bp.route('/announcements', methods=['POST'])
 @admin_required
@@ -55,7 +55,7 @@ def delete_announcement(id):
     db.commit()
     return jsonify({'success': True, 'message': 'Announcement deleted'})
 
-@bp.route('/pending', methods=['GET'])
+@bp.route('/admin/pending', methods=['GET'])
 @admin_required
 def get_pending_users():
     db = get_db()

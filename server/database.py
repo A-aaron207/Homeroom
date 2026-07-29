@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     display_name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
+    email TEXT DEFAULT '',
     password_hash TEXT NOT NULL,
     avatar_emoji TEXT DEFAULT '🎓',
     avatar_bg TEXT DEFAULT 'linear-gradient(135deg, #6366f1, #8b5cf6)',
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_spin_date TEXT,
     join_date TEXT DEFAULT (datetime('now')),
     role TEXT DEFAULT 'member',
-    status TEXT DEFAULT 'pending',
+    status TEXT DEFAULT 'approved',
     theme TEXT DEFAULT 'dark',
     purchased_items TEXT DEFAULT '[]',
     achievements TEXT DEFAULT '[]',
@@ -209,6 +209,30 @@ CREATE TABLE IF NOT EXISTS daily_spins (
     reward_amount INTEGER DEFAULT 0,
     spun_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link TEXT DEFAULT '',
+    is_read INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS note_bookmarks (
+    note_id TEXT REFERENCES notes(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (note_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_subject ON notes(subject);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_questions_asked ON questions(asked_by);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_note_bookmarks_user ON note_bookmarks(user_id);
+
 """
 
 
@@ -248,6 +272,21 @@ def init_db(app):
         db = get_db()
         db.executescript(SCHEMA)
         db.commit()
+
+        # Migration: add delivered_to column to messages if not present
+        try:
+            db.execute("ALTER TABLE messages ADD COLUMN delivered_to TEXT DEFAULT '[]'")
+            db.commit()
+        except Exception:
+            pass  # column already exists
+
+        # Migration: create note_bookmarks table if not present
+        try:
+            db.execute("CREATE TABLE IF NOT EXISTS note_bookmarks (note_id TEXT, user_id TEXT, created_at TEXT DEFAULT (datetime('now')), PRIMARY KEY (note_id, user_id))")
+            db.commit()
+        except Exception:
+            pass  # table already exists
+
         seed_marketplace(db)
         print("  Database initialized")
     app.teardown_appcontext(close_db)

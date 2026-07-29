@@ -5,7 +5,7 @@ import uuid
 import json
 import datetime
 
-bp = Blueprint('chats', __name__, url_prefix='/api/chats')
+bp = Blueprint('chats', __name__, url_prefix='/api')
 
 @bp.route('/conversations', methods=['GET'])
 @auth_required
@@ -14,6 +14,7 @@ def get_conversations():
     conversations = db.execute('''
         SELECT c.*, 
                (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message,
+               (SELECT content FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_content,
                (SELECT created_at FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_time
         FROM conversations c
         JOIN conversation_members cm ON c.id = cm.conversation_id
@@ -35,6 +36,13 @@ def get_conversations():
         
         c_dict['participants'] = [dict(m) for m in members]
         
+        # For DM conversations, derive name and icon from the other participant
+        if c_dict.get('type') == 'dm':
+            other = next((p for p in c_dict['participants'] if p['id'] != g.user['id']), None)
+            if other:
+                c_dict['name'] = other['display_name']
+                c_dict['icon'] = other['avatar_emoji']
+        
         # Determine unread count
         unread = db.execute('''
             SELECT COUNT(*) FROM messages 
@@ -45,6 +53,7 @@ def get_conversations():
         result.append(c_dict)
         
     return jsonify({'success': True, 'data': result})
+
 
 @bp.route('/conversations', methods=['POST'])
 @auth_required
@@ -159,8 +168,8 @@ def send_message(id):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
         
     m_id = str(uuid.uuid4())
-    db.execute('INSERT INTO messages (id, conversation_id, sender_id, content, reply_to, read_by) VALUES (?, ?, ?, ?, ?, ?)',
-               (m_id, id, g.user['id'], content, reply_to, json.dumps([g.user['id']])))
+    db.execute('INSERT INTO messages (id, conversation_id, sender_id, content, reply_to, read_by, delivered_to) VALUES (?, ?, ?, ?, ?, ?, ?)',
+               (m_id, id, g.user['id'], content, reply_to, json.dumps([g.user['id']]), json.dumps([g.user['id']])))
     db.commit()
     
     return jsonify({'success': True, 'data': {'id': m_id}})
@@ -246,3 +255,22 @@ def read_messages(id):
             
     db.commit()
     return jsonify({'success': True, 'message': 'Messages read'})
+
+@bp.route('/conversations/<id>/delivered', methods=['POST'])
+@auth_required
+def delivered_messages(id):
+    db = get_db()
+    messages = db.execute('SELECT id, delivered_to FROM messages WHERE conversation_id = ? AND sender_id != ?', (id, g.user['id'])).fetchall()
+    
+    for m in messages:
+        try:
+            delivered_to = json.loads(m['delivered_to']) if m['delivered_to'] else []
+        except:
+            delivered_to = []
+            
+        if g.user['id'] not in delivered_to:
+            delivered_to.append(g.user['id'])
+            db.execute('UPDATE messages SET delivered_to = ? WHERE id = ?', (json.dumps(delivered_to), m['id']))
+            
+    db.commit()
+    return jsonify({'success': True, 'message': 'Messages marked as delivered'})

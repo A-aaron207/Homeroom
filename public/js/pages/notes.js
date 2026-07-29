@@ -45,14 +45,18 @@ Homeroom.pages.notes = {
     this.currentSubject = '';
     this.currentSort = 'newest';
     this.currentSearch = '';
+    this.showBookmarked = false;
     
     const subjects = ['All', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Geography', 'History'];
     const chipsContainer = document.getElementById('subject-chips');
     
     if(chipsContainer) {
-        chipsContainer.innerHTML = subjects.map(s => `
-            <button class="subject-chip ${s === 'All' ? 'active' : ''}" data-subject="${s === 'All' ? '' : s}" style="padding: 0.4rem 1rem; border-radius: 2rem; border: 1px solid ${s === 'All' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background: ${s === 'All' ? 'var(--accent-color)' : 'rgba(0,0,0,0.2)'}; color: white; cursor: pointer; transition: all 0.2s; font-size: 0.9rem;">
-                ${s}
+        const allChips = [...subjects.map(s => ({ label: s, subject: s === 'All' ? '' : s, bookmarked: false })),
+                         { label: '🔖 Bookmarked', subject: '', bookmarked: true }];
+
+        chipsContainer.innerHTML = allChips.map(c => `
+            <button class="subject-chip ${c.label === 'All' ? 'active' : ''}" data-subject="${c.subject}" data-bookmarked="${c.bookmarked}" style="padding: 0.4rem 1rem; border-radius: 2rem; border: 1px solid ${c.label === 'All' ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background: ${c.label === 'All' ? 'var(--accent-color)' : 'rgba(0,0,0,0.2)'}; color: white; cursor: pointer; transition: all 0.2s; font-size: 0.9rem;">
+                ${c.label}
             </button>
         `).join('');
 
@@ -63,6 +67,7 @@ Homeroom.pages.notes = {
                 e.target.style.borderColor = 'var(--accent-color)';
                 e.target.classList.add('active');
                 this.currentSubject = e.target.dataset.subject;
+                this.showBookmarked = e.target.dataset.bookmarked === 'true';
                 this.loadNotes();
             });
         });
@@ -147,47 +152,56 @@ Homeroom.pages.notes = {
     content.innerHTML = `<div style="display: flex; justify-content: center; padding: 3rem;"><div class="spinner" style="width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 1s linear infinite;"></div></div>`;
     
     try {
-        const query = new URLSearchParams();
-        if(this.currentSubject) query.append('subject', this.currentSubject);
-        if(this.currentSort) query.append('sort', this.currentSort);
-        if(this.currentSearch) query.append('search', this.currentSearch);
+        let url;
+        if (this.showBookmarked) {
+            url = '/notes/bookmarked';
+        } else {
+            const query = new URLSearchParams();
+            if(this.currentSubject) query.append('subject', this.currentSubject);
+            if(this.currentSort) query.append('sort', this.currentSort);
+            if(this.currentSearch) query.append('search', this.currentSearch);
+            url = `/notes?${query.toString()}`;
+        }
 
-        const res = await Homeroom.API.get(`/notes?${query.toString()}`);
+        const res = await Homeroom.API.get(url);
         if(!res.success) throw new Error(res.message);
         
         const notes = res.data;
         if(notes.length === 0) {
             content.innerHTML = `
                 <div style="text-align: center; padding: 4rem 2rem; background: rgba(255,255,255,0.02); border-radius: 1rem; border: 1px dashed rgba(255,255,255,0.1);">
-                    <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;">📭</div>
-                    <h3 style="margin-top: 0; color: var(--text-color);">No notes found</h3>
-                    <p style="color: var(--text-muted);">Be the first to upload a note for this subject!</p>
+                    <div style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.5;">${this.showBookmarked ? '🔖' : '📭'}</div>
+                    <h3 style="margin-top: 0; color: var(--text-color);">${this.showBookmarked ? 'No bookmarks yet' : 'No notes found'}</h3>
+                    <p style="color: var(--text-muted);">${this.showBookmarked ? 'Bookmark notes to find them here quickly!' : 'Be the first to upload a note for this subject!'}</p>
                 </div>
             `;
             return;
         }
+
 
         content.innerHTML = `
             <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
                 ${notes.map(note => {
                     const rating = note.rating_count ? (note.rating_sum / note.rating_count).toFixed(1) : 'New';
                     const date = new Date(note.created_at).toLocaleDateString();
+                    const bookmarked = note.is_bookmarked;
                     return `
                         <div class="glass-card note-card" style="padding: 1.5rem; display: flex; flex-direction: column; cursor: pointer; position: relative;" onclick="Homeroom.pages.notes.openNote('${note.id}')">
                             <div style="position: absolute; top: -10px; right: 20px; background: var(--accent-color); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.8rem; font-weight: bold; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
                                 ${note.subject}
                             </div>
+                            <button class="btn-bookmark" data-id="${note.id}" data-bookmarked="${bookmarked ? '1' : '0'}" title="${bookmarked ? 'Remove bookmark' : 'Bookmark note'}" onclick="event.stopPropagation(); Homeroom.pages.notes.toggleBookmark(this)" style="position: absolute; top: 0.75rem; left: 0.75rem; background: transparent; border: none; cursor: pointer; font-size: 1.2rem; padding: 0.2rem; line-height: 1; opacity: ${bookmarked ? '1' : '0.3'}; transition: opacity 0.2s, transform 0.15s;">${bookmarked ? '🔖' : '🔖'}</button>
                             <h3 style="margin: 0.5rem 0; font-size: 1.25rem; color: var(--text-color);">${note.title}</h3>
                             <p style="color: var(--text-muted); font-size: 0.9rem; flex: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 1rem;">${note.description || 'No description provided.'}</p>
                             
                             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;">
-                                ${(JSON.parse(note.tags || '[]')).map(t => `<span style="background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">#${t}</span>`).join('')}
+                                ${(Array.isArray(note.tags) ? note.tags : (()=>{ try{ return JSON.parse(note.tags||'[]'); }catch(e){ return []; } })()).map(t => `<span style="background: rgba(255,255,255,0.1); padding: 0.2rem 0.5rem; border-radius: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">#${t}</span>`).join('')}
                             </div>
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05); margin-top: auto;">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div style="width: 24px; height: 24px; background: #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">👤</div>
-                                    <span style="font-size: 0.85rem; color: var(--text-muted);">${note.uploaded_by_name || 'User'}</span>
+                                    <div style="width: 24px; height: 24px; background: #333; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px;">${note.author ? (note.author.avatar_emoji || '👤') : '👤'}</div>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted);">${note.author ? (note.author.display_name || note.author.username) : (note.uploaded_by_name || 'User')}</span>
                                 </div>
                                 <div style="display: flex; gap: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
                                     <span style="display: flex; align-items: center; gap: 0.25rem;">⭐ ${rating}</span>
@@ -202,6 +216,26 @@ Homeroom.pages.notes = {
 
     } catch(err) {
         content.innerHTML = `<div class="error-state">Error loading notes: ${err.message}</div>`;
+    }
+  },
+  async toggleBookmark(btn) {
+    const noteId = btn.dataset.id;
+    const wasBookmarked = btn.dataset.bookmarked === '1';
+    // Optimistic update
+    btn.dataset.bookmarked = wasBookmarked ? '0' : '1';
+    btn.style.opacity = wasBookmarked ? '0.3' : '1';
+    btn.style.transform = 'scale(1.3)';
+    setTimeout(() => btn.style.transform = 'scale(1)', 200);
+    try {
+        const res = await Homeroom.API.post(`/notes/${noteId}/bookmark`, {});
+        if (!res.success) throw new Error(res.message);
+        // If on bookmarked view, reload to remove the un-bookmarked card
+        if (this.showBookmarked && !res.bookmarked) this.loadNotes();
+    } catch(err) {
+        // Revert on failure
+        btn.dataset.bookmarked = wasBookmarked ? '1' : '0';
+        btn.style.opacity = wasBookmarked ? '1' : '0.3';
+        Homeroom.toast('Failed to update bookmark', 'error');
     }
   },
   async openNote(id) {

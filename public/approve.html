@@ -12,8 +12,9 @@
     <div class="auth-container">
         <div class="auth-card glass-panel" id="approve-card" style="display: none;">
             <div class="auth-header">
-                <div class="auth-logo">🏠 Homeroom</div>
-                <h2 class="auth-title">User Approval</h2>
+                <div class="auth-logo">🏠 Homeroom Consent</div>
+                <h2 class="auth-title">Profile Creation Permission</h2>
+                <p class="text-muted text-sm mt-1">Review student details to allow or deny account creation</p>
             </div>
             
             <div id="user-details" class="user-details-card">
@@ -22,9 +23,9 @@
             
             <div id="approve-message" class="message" style="display: none;"></div>
             
-            <div class="form-row mt-4" id="action-buttons">
-                <button id="btn-approve" class="btn btn-success btn-full">✅ Approve</button>
-                <button id="btn-reject" class="btn btn-danger btn-full">❌ Reject</button>
+            <div class="form-row mt-4" id="action-buttons" style="gap: 12px;">
+                <button id="btn-approve" class="btn btn-success btn-full" style="padding: 12px; font-weight: 600;">✅ Yes, Accept & Create Profile</button>
+                <button id="btn-reject" class="btn btn-danger btn-full" style="padding: 12px; font-weight: 600;">❌ No, Reject Request</button>
             </div>
         </div>
         
