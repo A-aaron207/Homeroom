@@ -1,7 +1,12 @@
 window.Homeroom = window.Homeroom || {};
 
 Homeroom.API = {
-  baseURL: '/api',
+  baseURL: (function() {
+      if (window.HOMEROOM_API_URL) return window.HOMEROOM_API_URL;
+      const customApi = localStorage.getItem('homeroom_api_url');
+      if (customApi) return customApi;
+      return '/api';
+  })(),
   token: localStorage.getItem('homeroom_token'),
   
   getToken() {
