@@ -261,6 +261,8 @@ const App = {
     async navigate() {
         let hash = window.location.hash.slice(1) || 'home';
         
+        document.body.classList.remove('in-active-chat');
+        
         if (this.currentPage && this.currentPage.destroy) {
             try { this.currentPage.destroy(); } catch(e) {}
         }

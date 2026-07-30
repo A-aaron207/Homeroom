@@ -77,9 +77,23 @@ Homeroom.pages.chats = {
         .fab-container, .fab-main, #fab-container { display:none !important; }
 
         @media (max-width: 768px) {
-          .page-chats {
-            height: calc(100dvh - 120px) !important;
-            max-height: calc(100vh - 120px) !important;
+          body.in-active-chat .mobile-nav,
+          body.in-active-chat .app-header,
+          body:has(#chat-layout.has-active-chat) .mobile-nav,
+          body:has(#chat-layout.has-active-chat) .app-header {
+            display: none !important;
+          }
+          body.in-active-chat .main-wrapper,
+          body.in-active-chat .content-area,
+          body.in-active-chat .app-layout,
+          body.in-active-chat .page-chats,
+          body:has(#chat-layout.has-active-chat) .main-wrapper,
+          body:has(#chat-layout.has-active-chat) .content-area,
+          body:has(#chat-layout.has-active-chat) .app-layout,
+          body:has(#chat-layout.has-active-chat) .page-chats {
+            height: 100dvh !important;
+            max-height: 100dvh !important;
+            height: 100vh !important;
             padding: 0 !important;
             margin: 0 !important;
           }
@@ -87,10 +101,15 @@ Homeroom.pages.chats = {
             display: none !important;
           }
           .chat-layout {
-            border-radius: 0.5rem !important;
+            border-radius: 0 !important;
             border: none !important;
             height: 100% !important;
             width: 100% !important;
+          }
+          body.in-active-chat .chat-layout,
+          body:has(#chat-layout.has-active-chat) .chat-layout {
+            height: 100dvh !important;
+            height: 100vh !important;
           }
           .chat-layout:not(.has-active-chat) .chat-sidebar {
             display: flex !important;
@@ -213,9 +232,15 @@ Homeroom.pages.chats = {
     }).join('');
   },
 
+  destroy() {
+    if (this._pollInterval) clearInterval(this._pollInterval);
+    document.body.classList.remove('in-active-chat');
+  },
+
   closeChat() {
     this.currentChatId = null;
     this._replyTo = null;
+    document.body.classList.remove('in-active-chat');
     const layout = document.getElementById('chat-layout');
     if (layout) layout.classList.remove('has-active-chat');
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
@@ -235,8 +260,13 @@ Homeroom.pages.chats = {
     this._replyTo = null;
     const layout = document.getElementById('chat-layout');
     if (layout) {
-      if (id) layout.classList.add('has-active-chat');
-      else layout.classList.remove('has-active-chat');
+      if (id) {
+        layout.classList.add('has-active-chat');
+        document.body.classList.add('in-active-chat');
+      } else {
+        layout.classList.remove('has-active-chat');
+        document.body.classList.remove('in-active-chat');
+      }
     }
 
     const chat = this.conversations.find(c => c.id === id);
