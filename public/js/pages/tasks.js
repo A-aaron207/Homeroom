@@ -43,7 +43,7 @@ Homeroom.pages.tasks = {
     
     document.getElementById('btn-create-task')?.addEventListener('click', () => {
         Homeroom.modal.open('Create Task', `
-            <form id="create-task-form" style="display: flex; flex-direction: column; gap: 1rem;">
+            <form id="create-task-form" action="javascript:void(0);" onsubmit="return false;" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Title</label>
                     <input type="text" name="title" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;">
@@ -68,7 +68,7 @@ Homeroom.pages.tasks = {
                 </div>
             </form>
         `, `
-            <button class="btn btn-premium" onclick="document.getElementById('create-task-form').dispatchEvent(new Event('submit'))" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Create Task</button>
+            <button class="btn btn-premium" onclick="const f=document.getElementById('create-task-form'); if(f.requestSubmit){f.requestSubmit();}else{f.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));}" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Create Task</button>
         `);
 
         document.getElementById('create-task-form').addEventListener('submit', async (e) => {
@@ -151,12 +151,12 @@ Homeroom.pages.tasks = {
   
   submitProof(taskId, taskTitle) {
       Homeroom.modal.open(`Submit: ${taskTitle}`, `
-        <form id="submit-proof-form">
+        <form id="submit-proof-form" action="javascript:void(0);" onsubmit="return false;">
             <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Proof of Completion</label>
             <textarea name="proof" required rows="4" style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="Describe how you completed this task, or paste a link..."></textarea>
         </form>
       `, `
-        <button class="btn btn-premium" onclick="document.getElementById('submit-proof-form').dispatchEvent(new Event('submit'))" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Submit for Review</button>
+        <button class="btn btn-premium" onclick="const f=document.getElementById('submit-proof-form'); if(f.requestSubmit){f.requestSubmit();}else{f.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));}" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Submit for Review</button>
       `);
       
       document.getElementById('submit-proof-form').addEventListener('submit', async (e) => {

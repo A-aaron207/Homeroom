@@ -266,6 +266,61 @@ def seed_marketplace(db):
         print(f"  Seeded {len(MARKETPLACE_ITEMS)} marketplace items")
 
 
+def seed_demo_content(db):
+    """Seed initial notes, questions, tasks, and announcements if tables are empty."""
+    # Seed Announcements
+    a_count = db.execute("SELECT COUNT(*) as c FROM announcements").fetchone()['c']
+    if a_count == 0:
+        db.execute('''
+            INSERT INTO announcements (id, title, content, pinned) VALUES 
+            ('welcome_ann', '🎉 Welcome to Homeroom!', 'Your private class hub for study notes, Q&A, streak rewards, and team collaboration. Earn ClassCoins (CC) by contributing!', 1),
+            ('study_ann', '📚 Midterm Study Session Schedule', 'Group study sessions are scheduled every weekday at 4 PM in the Class Group chat. Bring your questions and notes!', 0)
+        ''')
+        db.commit()
+
+    # Seed Notes
+    n_count = db.execute("SELECT COUNT(*) as c FROM notes").fetchone()['c']
+    if n_count == 0:
+        notes_data = [
+            ('note_calc_1', 'Calculus & Derivatives Complete Guide', 'Comprehensive summary of limits, derivatives, chain rule, and optimization problems with practice examples.', 'Mathematics', 'calculus_guide.pdf', 1024500, 14, 24.0, 5, '["calculus", "math", "exam"]'),
+            ('note_phys_1', 'Newtonian Mechanics & Dynamics Summary', 'Key formulas and diagrams covering Kinematics, Newton’s Laws of Motion, Work, Energy, and Momentum.', 'Physics', 'physics_mechanics.pdf', 2150000, 22, 38.0, 8, '["physics", "mechanics", "formulas"]'),
+            ('note_chem_1', 'Organic Chemistry Functional Groups & Reactions', 'Visual reference sheet for alkane, alkene, alcohol, and carboxylic acid reactions and mechanisms.', 'Chemistry', 'organic_chem_sheet.pdf', 850000, 18, 30.0, 6, '["chemistry", "organic", "study-guide"]'),
+            ('note_bio_1', 'Cell Biology: Mitosis vs Meiosis Overview', 'Detailed comparison table of cellular division stages, chromosome counts, and genetic variation concepts.', 'Biology', 'cell_biology_overview.pdf', 1400000, 11, 20.0, 4, '["biology", "cells", "genetics"]')
+        ]
+        for n in notes_data:
+            db.execute('''
+                INSERT INTO notes (id, title, description, subject, file_name, file_size, download_count, rating_sum, rating_count, tags)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', n)
+        db.commit()
+
+    # Seed Questions
+    q_count = db.execute("SELECT COUNT(*) as c FROM questions").fetchone()['c']
+    if q_count == 0:
+        questions_data = [
+            ('q_math_1', 'How do you derive and apply integration by parts step-by-step?', 'I am struggling to choose u and dv correctly when integrating x * e^x. What is the LIATE rule and how does it work?', '["calculus", "integration", "math"]', 'Mathematics', 4, 1),
+            ('q_phys_1', 'What is the physical difference between speed, velocity, and acceleration?', 'Can someone clarify with real-world examples why velocity has direction but speed does not, and how acceleration relates?', '["physics", "kinematics", "concepts"]', 'Physics', 6, 2),
+            ('q_chem_1', 'How do you balance redox equations in acidic solutions using half-reactions?', 'Step 3 of balancing charge with H+ ions gets confusing when oxygen atoms are unequal. Is there a shortcut?', '["chemistry", "redox", "equations"]', 'Chemistry', 3, 1)
+        ]
+        for q in questions_data:
+            db.execute('''
+                INSERT INTO questions (id, title, content, tags, subject, upvotes, answer_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', q)
+        db.commit()
+
+    # Seed Tasks
+    t_count = db.execute("SELECT COUNT(*) as c FROM tasks").fetchone()['c']
+    if t_count == 0:
+        db.execute('''
+            INSERT INTO tasks (id, title, description, reward_coins, reward_xp, status) VALUES 
+            ('task_first_note', 'Share Your First Study Note', 'Upload a PDF, document, or image note for any class subject to earn coins and XP.', 15, 25, 'active'),
+            ('task_answer_q', 'Help a Classmate in Q&A', 'Post a helpful answer to any open doubt in the Q&A forum.', 10, 20, 'active'),
+            ('task_spin_wheel', 'Spin the Daily Reward Wheel', 'Spin the daily wheel on your dashboard to claim bonus ClassCoins and XP.', 5, 10, 'active')
+        ''')
+        db.commit()
+
+
 def init_db(app):
     """Initialize the database with schema and seed data."""
     with app.app_context():
@@ -288,5 +343,6 @@ def init_db(app):
             pass  # table already exists
 
         seed_marketplace(db)
+        seed_demo_content(db)
         print("  Database initialized")
     app.teardown_appcontext(close_db)

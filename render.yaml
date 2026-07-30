@@ -11,3 +11,9 @@ services:
         value: "0"
       - key: PORT
         value: "10000"
+      - key: DB_PATH
+        value: /data/homeroom.db
+    disk:
+      name: homeroom-data
+      mountPath: /data
+      sizeGB: 1

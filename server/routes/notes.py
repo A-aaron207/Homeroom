@@ -23,15 +23,15 @@ def list_notes():
         SELECT n.*, u.username, u.display_name, u.avatar_emoji, u.username_color,
                CASE WHEN nb.user_id IS NOT NULL THEN 1 ELSE 0 END as is_bookmarked
         FROM notes n
-        JOIN users u ON n.uploaded_by = u.id
+        LEFT JOIN users u ON n.uploaded_by = u.id
         LEFT JOIN note_bookmarks nb ON nb.note_id = n.id AND nb.user_id = ?
         WHERE 1=1
     '''
     params = [user_id]
     
-    if subject:
+    if subject and subject.strip():
         query += ' AND n.subject = ?'
-        params.append(subject)
+        params.append(subject.strip())
         
     if search:
         query += ' AND (n.title LIKE ? OR n.description LIKE ?)'

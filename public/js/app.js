@@ -187,8 +187,11 @@ const App = {
     },
     
     updateCoins() {
-        let coins = Homeroom.store.currentUser?.coins || 0;
-        if (Homeroom.store.wallet) {
+        const u = Homeroom.store.currentUser;
+        let coins = 0;
+        if (u && u.coins !== undefined && u.coins !== null) {
+            coins = u.coins;
+        } else if (Homeroom.store.wallet) {
             coins = Homeroom.store.wallet.balance;
         }
         const coinDisplay = document.getElementById('header-coins');
@@ -215,17 +218,17 @@ const App = {
             });
         }
 
-        // FAB Speed Dial
-        const fabMain = document.getElementById('fab-main');
-        const fabContainer = document.getElementById('fab-container');
-        if (fabMain && fabContainer) {
-            fabMain.addEventListener('click', (e) => {
+        // Header Quick Create Dropdown
+        const btnQuick = document.getElementById('btn-quick-create');
+        const quickMenu = document.getElementById('quick-action-menu');
+        if (btnQuick && quickMenu) {
+            btnQuick.addEventListener('click', (e) => {
                 e.stopPropagation();
-                fabContainer.classList.toggle('active');
+                quickMenu.style.display = quickMenu.style.display === 'flex' ? 'none' : 'flex';
             });
             document.addEventListener('click', (e) => {
-                if (!fabContainer.contains(e.target)) {
-                    fabContainer.classList.remove('active');
+                if (quickMenu && !quickMenu.contains(e.target) && e.target !== btnQuick) {
+                    quickMenu.style.display = 'none';
                 }
             });
         }
@@ -258,6 +261,10 @@ const App = {
     async navigate() {
         let hash = window.location.hash.slice(1) || 'home';
         
+        if (this.currentPage && this.currentPage.destroy) {
+            try { this.currentPage.destroy(); } catch(e) {}
+        }
+        
         document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(el => {
             el.classList.remove('active');
             if (el.dataset.page === hash) el.classList.add('active');
@@ -267,6 +274,7 @@ const App = {
         main.innerHTML = '<div class="text-center mt-5"><p>Loading...</p></div>';
         
         const page = Homeroom.pages[hash];
+        this.currentPage = page;
         if (page) {
             try {
                 main.innerHTML = await page.render();
@@ -283,6 +291,58 @@ const App = {
         }
         
         document.getElementById('sidebar')?.classList.remove('active');
+    },
+
+    async refreshUser() {
+        try {
+            const res = await Homeroom.API.get('/auth/me');
+            if (res.success && res.data && res.data.user) {
+                Homeroom.store.currentUser = res.data.user;
+                Homeroom.auth.user = res.data.user;
+                this.updateHeaderAndSidebar();
+                if (Homeroom.store && Homeroom.store.emit) {
+                    Homeroom.store.emit('user_updated', res.data.user);
+                }
+            }
+        } catch(e) {}
+    }
+};
+
+window.App = App;
+
+Homeroom.ui = {
+    skeletonGrid(count = 4) {
+        return `<div class="skeleton-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem;">
+            ${Array(count).fill(0).map(() => `
+                <div class="glass-card skeleton-card" style="padding: 1.5rem; height: 180px; display: flex; flex-direction: column; gap: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 1rem; position: relative; overflow: hidden;">
+                    <div style="height: 20px; width: 60%; background: rgba(255,255,255,0.1); border-radius: 4px; animation: pulse 1.5s infinite;"></div>
+                    <div style="height: 14px; width: 90%; background: rgba(255,255,255,0.05); border-radius: 4px; animation: pulse 1.5s infinite;"></div>
+                    <div style="height: 14px; width: 75%; background: rgba(255,255,255,0.05); border-radius: 4px; animation: pulse 1.5s infinite;"></div>
+                    <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="height: 24px; width: 24px; border-radius: 50%; background: rgba(255,255,255,0.1);"></div>
+                        <div style="height: 16px; width: 50px; background: rgba(255,255,255,0.1); border-radius: 4px;"></div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+    },
+
+    errorState(message = 'Something went wrong', retryFnName = '') {
+        return `<div style="text-align: center; padding: 3rem 2rem; background: rgba(239, 68, 68, 0.05); border-radius: 1rem; border: 1px solid rgba(239, 68, 68, 0.2); margin: 1rem 0;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">⚠️</div>
+            <h3 style="margin: 0 0 0.5rem 0; color: #ef4444; font-size: 1.3rem;">${message}</h3>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: 0.95rem;">Please check your connection and try again.</p>
+            ${retryFnName ? `<button class="btn btn-premium" onclick="${retryFnName}" style="padding: 0.6rem 1.5rem; border-radius: 2rem;">🔄 Retry Now</button>` : ''}
+        </div>`;
+    },
+
+    emptyState(icon = '📭', title = 'Nothing here yet', subtitle = '', actionBtn = '') {
+        return `<div style="text-align: center; padding: 3.5rem 2rem; background: rgba(255,255,255,0.02); border-radius: 1rem; border: 1px dashed rgba(255,255,255,0.1); margin: 1rem 0;">
+            <div style="font-size: 3.5rem; margin-bottom: 1rem; opacity: 0.9;">${icon}</div>
+            <h3 style="margin: 0 0 0.5rem 0; color: var(--text-color); font-size: 1.4rem; font-weight: 700;">${title}</h3>
+            ${subtitle ? `<p style="color: var(--text-muted); font-size: 0.95rem; max-width: 450px; margin: 0 auto 1.5rem auto; line-height: 1.5;">${subtitle}</p>` : ''}
+            ${actionBtn}
+        </div>`;
     }
 };
 

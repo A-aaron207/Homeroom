@@ -27,28 +27,17 @@ def get_users():
 @bp.route('/<id>', methods=['GET'])
 @auth_required
 def get_user_profile(id):
+    if id == 'me':
+        id = g.user['id']
+        
     db = get_db()
-    user = db.execute('SELECT id, username, display_name, bio, avatar_emoji, avatar_bg, role, xp, coins, reputation, streak_current, streak_longest, join_date, purchased_items, achievements, profile_frame, username_color FROM users WHERE id = ?', (id,)).fetchone()
+    user = db.execute('SELECT * FROM users WHERE id = ?', (id,)).fetchone()
     
     if not user:
         return jsonify({'success': False, 'message': 'User not found'}), 404
         
-    user_dict = dict(user)
-    try:
-        user_dict['purchased_items'] = json.loads(user_dict['purchased_items'])
-    except:
-        user_dict['purchased_items'] = []
-        
-    try:
-        user_dict['achievements'] = json.loads(user_dict['achievements'])
-    except:
-        user_dict['achievements'] = []
-        
-    user_level = 1
-    for lvl in LEVELS:
-        if user['xp'] >= lvl['min_xp']:
-            user_level = lvl['level']
-    user_dict['level'] = user_level
+    from server.utils import format_user
+    user_dict = format_user(user)
     
     # Stats
     note_count = db.execute('SELECT COUNT(*) FROM notes WHERE uploaded_by = ?', (id,)).fetchone()[0]
@@ -65,7 +54,8 @@ def get_user_profile(id):
         'questions': question_count
     }
     
-    return jsonify({'success': True, 'data': user_dict})
+    # Return both top-level fields and user wrapper for 100% compatibility
+    return jsonify({'success': True, 'data': {**user_dict, 'user': user_dict}})
 
 @bp.route('/me', methods=['PUT'])
 @auth_required

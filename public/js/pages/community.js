@@ -150,7 +150,7 @@ Homeroom.pages.community = {
       try {
           const res = await Homeroom.API.get(`/users/${id}`);
           if(!res.success) throw new Error();
-          const u = res.data.user;
+          const u = res.data.user || res.data;
           const level = Math.floor(u.xp / 1000) + 1;
           
           Homeroom.modal.open('User Profile', `

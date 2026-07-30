@@ -19,14 +19,14 @@ def list_questions():
         SELECT q.*, u.username, u.display_name, u.display_name as asked_by_name, u.avatar_emoji, u.username_color,
                (SELECT COUNT(*) FROM answers WHERE question_id = q.id AND is_best = 1) as best_answer_count
         FROM questions q
-        JOIN users u ON q.asked_by = u.id
+        LEFT JOIN users u ON q.asked_by = u.id
         WHERE 1=1
     '''
     params = []
     
-    if subject:
+    if subject and subject.strip():
         query += ' AND q.subject = ?'
-        params.append(subject)
+        params.append(subject.strip())
         
     if search:
         query += ' AND (q.title LIKE ? OR q.content LIKE ?)'

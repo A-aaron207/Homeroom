@@ -87,7 +87,7 @@ Homeroom.pages.notes = {
 
     document.getElementById('btn-upload-note')?.addEventListener('click', () => {
         Homeroom.modal.open('Upload Note', `
-            <form id="upload-note-form" style="display: flex; flex-direction: column; gap: 1rem;">
+            <form id="upload-note-form" action="javascript:void(0);" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Title</label>
                     <input type="text" name="title" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="e.g. Chapter 4 Integration">
@@ -110,19 +110,19 @@ Homeroom.pages.notes = {
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">File</label>
                     <input type="file" name="file" required style="width: 100%; padding: 0.5rem; color: white;">
                 </div>
+                <button type="submit" id="btn-submit-note" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; margin-top: 0.5rem;">Upload & Earn +15 CC</button>
             </form>
-        `, `
-            <button class="btn btn-premium" onclick="document.getElementById('upload-note-form').dispatchEvent(new Event('submit'))" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Upload & Earn +15 CC</button>
-        `);
+        `, '');
 
-        document.getElementById('upload-note-form').addEventListener('submit', async (e) => {
+        const form = document.getElementById('upload-note-form');
+        form.onsubmit = async (e) => {
             e.preventDefault();
-            const form = e.target;
             const formData = new FormData(form);
-            const tags = formData.get('tags').split(',').map(t=>t.trim()).filter(Boolean);
+            const rawTags = formData.get('tags') || '';
+            const tags = rawTags.split(',').map(t=>t.trim()).filter(Boolean);
             formData.set('tags', JSON.stringify(tags));
             
-            const btn = form.closest('.modal-content').querySelector('.modal-footer button');
+            const btn = document.getElementById('btn-submit-note');
             const oldText = btn.innerText;
             btn.innerText = 'Uploading...';
             btn.disabled = true;
@@ -130,8 +130,13 @@ Homeroom.pages.notes = {
             try {
                 const res = await Homeroom.API.post('/notes', formData, true);
                 if(res.success) {
-                    Homeroom.toast('Note uploaded successfully!', 'success');
+                    Homeroom.toast('Note uploaded successfully! (+15 CC, +25 XP)', 'success');
                     Homeroom.modal.close();
+                    this.currentSubject = '';
+                    this.showBookmarked = false;
+                    if (window.App && window.App.refreshUser) {
+                        window.App.refreshUser();
+                    }
                     this.loadNotes();
                 } else {
                     Homeroom.toast(res.message || 'Failed to upload', 'error');
@@ -142,7 +147,8 @@ Homeroom.pages.notes = {
                 btn.innerText = oldText;
                 btn.disabled = false;
             }
-        });
+            return false;
+        };
     });
 
     this.loadNotes();

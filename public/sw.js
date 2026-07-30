@@ -1,9 +1,12 @@
-const CACHE_NAME = 'homeroom-v1';
+const CACHE_NAME = 'homeroom-v3';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/auth.html',
     '/approve.html',
+    '/favicon.ico',
+    '/favicon.png',
+    '/favicon.svg',
     '/manifest.json',
     '/css/styles.css',
     '/js/api.js',
@@ -48,6 +51,20 @@ self.addEventListener('fetch', (e) => {
                     headers: { 'Content-Type': 'application/json' }
                 });
             })
+        );
+        return;
+    }
+
+    // Network-first for JS and CSS files so code updates apply immediately without hard refresh
+    if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname === '/' || url.pathname.endsWith('.html')) {
+        e.respondWith(
+            fetch(e.request).then((fetchRes) => {
+                if (fetchRes.status === 200 && e.request.method === 'GET') {
+                    const clone = fetchRes.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+                }
+                return fetchRes;
+            }).catch(() => caches.match(e.request))
         );
         return;
     }

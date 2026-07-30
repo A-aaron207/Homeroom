@@ -362,16 +362,22 @@ Homeroom.pages.home = {
         try {
           const res = await Homeroom.API.post('/daily/spin');
           if (res.success) {
+            const data = res.data || {};
+            const isNothing = data.reward_type === 'nothing' || data.reward_amount === 0;
+            const icon = isNothing ? '😅' : '🎉';
+            const title = isNothing ? 'Better Luck Next Time!' : 'You Won!';
+            const rewardLabel = isNothing ? 'Try Again Tomorrow!' : `+${data.reward_amount} ${data.reward_type === 'coins' ? 'ClassCoins (CC)' : 'XP'}`;
+
             Homeroom.modal.open('🎡 Spin Result!', `
               <div style="text-align:center;padding:2rem;">
-                <div style="font-size:5rem;margin-bottom:1rem;">🎉</div>
-                <h2 style="margin:0 0 0.5rem 0;font-size:1.5rem;">You Won!</h2>
-                <p style="font-size:2rem;color:var(--accent,#6366f1);font-weight:800;margin:0.5rem 0;">
-                  +${res.data.reward_amount} ${res.data.reward_type.toUpperCase()}
+                <div style="font-size:5rem;margin-bottom:1rem;">${icon}</div>
+                <h2 style="margin:0 0 0.5rem 0;font-size:1.5rem;">${title}</h2>
+                <p style="font-size:1.8rem;color:var(--accent,#6366f1);font-weight:800;margin:0.5rem 0;">
+                  ${rewardLabel}
                 </p>
                 <p style="color:var(--text-muted,#718096);font-size:0.9rem;">Keep spinning daily for bigger rewards!</p>
               </div>
-            `, '<button onclick="Homeroom.modal.close();Homeroom.pages.home.init();" class="btn btn-premium" style="width:100%;padding:1rem;border-radius:0.5rem;">Awesome! 🚀</button>');
+            `, '<button onclick="Homeroom.modal.close();Homeroom.pages.home.init();" class="btn btn-premium" style="width:100%;padding:1rem;border-radius:0.5rem;">Got it! 🚀</button>');
           } else {
             Homeroom.toast(res.message || 'Already spun today', 'info');
             btnSpin.innerHTML = '⏳ Tomorrow';

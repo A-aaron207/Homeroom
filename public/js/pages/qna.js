@@ -83,7 +83,7 @@ Homeroom.pages.qna = {
 
     document.getElementById('btn-ask-q')?.addEventListener('click', () => {
         Homeroom.modal.open('Ask Question', `
-            <form id="ask-q-form" style="display: flex; flex-direction: column; gap: 1rem;">
+            <form id="ask-q-form" action="javascript:void(0);" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div>
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Title</label>
                     <input type="text" name="title" required style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="e.g. How to balance this chemical equation?">
@@ -102,18 +102,17 @@ Homeroom.pages.qna = {
                     <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Tags (comma separated)</label>
                     <input type="text" name="tags" style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="chemistry, equations">
                 </div>
+                <button type="submit" id="btn-submit-q" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; margin-top: 0.5rem;">Post Question</button>
             </form>
-        `, `
-            <button class="btn btn-premium" onclick="document.getElementById('ask-q-form').dispatchEvent(new Event('submit'))" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Post Question</button>
-        `);
+        `, '');
 
-        document.getElementById('ask-q-form').addEventListener('submit', async (e) => {
+        const form = document.getElementById('ask-q-form');
+        form.onsubmit = async (e) => {
             e.preventDefault();
-            const form = e.target;
             const data = Object.fromEntries(new FormData(form));
             data.tags = data.tags ? data.tags.split(',').map(t=>t.trim()).filter(Boolean) : [];
             
-            const btn = form.closest('.modal-content').querySelector('.modal-footer button');
+            const btn = document.getElementById('btn-submit-q');
             const oldText = btn.innerText;
             btn.innerText = 'Posting...';
             btn.disabled = true;
@@ -121,8 +120,9 @@ Homeroom.pages.qna = {
             try {
                 const res = await Homeroom.API.post('/questions', data);
                 if(res.success) {
-                    Homeroom.toast('Question posted!', 'success');
+                    Homeroom.toast('Question posted successfully!', 'success');
                     Homeroom.modal.close();
+                    this.currentSubject = '';
                     this.loadQuestions();
                 } else {
                     Homeroom.toast(res.message || 'Failed to post', 'error');
@@ -133,7 +133,8 @@ Homeroom.pages.qna = {
                 btn.innerText = oldText;
                 btn.disabled = false;
             }
-        });
+            return false;
+        };
     });
 
     this.loadQuestions();

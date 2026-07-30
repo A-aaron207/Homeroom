@@ -97,7 +97,7 @@ Homeroom.pages.wallet = {
             const users = usersRes.data.filter(u => u.id !== Homeroom.auth.user.id);
             
             Homeroom.modal.open('Transfer Coins', `
-                <form id="transfer-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                <form id="transfer-form" action="javascript:void(0);" style="display: flex; flex-direction: column; gap: 1rem;">
                     <div>
                         <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Recipient</label>
                         <select name="recipientId" required style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;">
@@ -107,25 +107,25 @@ Homeroom.pages.wallet = {
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Amount (CC)</label>
-                        <input type="number" name="amount" min="1" max="${this.walletData?.balance || 0}" required style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="e.g. 50">
+                        <input type="number" name="amount" min="1" max="${this.walletData?.balance || 9999}" required style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="e.g. 50">
                     </div>
                     <div>
                         <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Reason (optional)</label>
                         <input type="text" name="reason" style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" placeholder="e.g. Thanks for the help!">
                     </div>
+                    <button type="submit" id="btn-submit-transfer" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; margin-top: 0.5rem;">Send Coins</button>
                 </form>
-            `, `
-                <button class="btn btn-premium" onclick="document.getElementById('transfer-form').dispatchEvent(new Event('submit'))" style="width: 100%; padding: 1rem; border-radius: 0.5rem;">Send Coins</button>
-            `);
+            `, '');
 
-            document.getElementById('transfer-form').addEventListener('submit', async (e) => {
+            const form = document.getElementById('transfer-form');
+            form.onsubmit = async (e) => {
                 e.preventDefault();
-                const btn = e.target.closest('.modal-content').querySelector('.modal-footer button');
+                const btn = document.getElementById('btn-submit-transfer');
                 const oldText = btn.innerText;
                 btn.innerText = 'Sending...';
                 btn.disabled = true;
 
-                const data = Object.fromEntries(new FormData(e.target));
+                const data = Object.fromEntries(new FormData(form));
                 data.amount = parseInt(data.amount);
 
                 try {
@@ -133,7 +133,10 @@ Homeroom.pages.wallet = {
                     if(res.success) {
                         Homeroom.toast('Transfer successful!', 'success');
                         Homeroom.modal.close();
-                        this.loadData(); // reload
+                        if (window.App && window.App.refreshUser) {
+                            window.App.refreshUser();
+                        }
+                        this.loadData();
                     } else {
                         Homeroom.toast(res.message || 'Transfer failed', 'error');
                         btn.innerText = oldText;
@@ -144,7 +147,8 @@ Homeroom.pages.wallet = {
                     btn.innerText = oldText;
                     btn.disabled = false;
                 }
-            });
+                return false;
+            };
         } catch(e) {
             Homeroom.toast('Failed to load users for transfer', 'error');
         }
@@ -174,8 +178,8 @@ Homeroom.pages.wallet = {
       const list = document.getElementById('transactions-list');
       let txs = this.walletData.transactions || [];
       
-      if(this.currentFilter === 'earned') txs = txs.filter(t => t.amount > 0);
-      if(this.currentFilter === 'spent') txs = txs.filter(t => t.amount < 0);
+      if(this.currentFilter === 'earned') txs = txs.filter(t => t.type === 'earned' || t.amount > 0);
+      if(this.currentFilter === 'spent') txs = txs.filter(t => t.type === 'spent' || t.type === 'expense' || t.amount < 0);
       
       if(txs.length === 0) {
           list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No transactions found.</div>';
@@ -183,17 +187,20 @@ Homeroom.pages.wallet = {
       }
       
       const getIcon = (cat) => {
+          if(!cat) return '🪙';
           if(cat.includes('spin')) return '🎡';
           if(cat.includes('login')) return '📅';
           if(cat.includes('note')) return '📚';
-          if(cat.includes('purchase')) return '🛒';
+          if(cat.includes('purchase') || cat.includes('market')) return '🛒';
           if(cat.includes('transfer')) return '💸';
           if(cat.includes('answer')) return '💡';
           return '🪙';
       };
       
       list.innerHTML = txs.map(t => {
-          const isPos = t.amount > 0;
+          const isSpent = t.type === 'spent' || t.type === 'expense' || t.amount < 0;
+          const isPos = !isSpent;
+          const absAmount = Math.abs(t.amount);
           return `
               <div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.02);">
                   <div style="display: flex; align-items: center; gap: 1rem;">
@@ -206,7 +213,7 @@ Homeroom.pages.wallet = {
                       </div>
                   </div>
                   <div style="font-weight: bold; font-size: 1.1rem; color: ${isPos ? '#22c55e' : '#ef4444'};">
-                      ${isPos ? '+' : ''}${t.amount} CC
+                      ${isPos ? '+' : '-'}${absAmount} CC
                   </div>
               </div>
           `;

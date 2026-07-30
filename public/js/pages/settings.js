@@ -119,7 +119,7 @@ Homeroom.pages.settings = {
           if(!userRes.success) throw new Error();
           
           const user = userRes.data.user;
-          const purchased = JSON.parse(user.purchased_items || '[]');
+          const purchased = Array.isArray(user.purchased_items) ? user.purchased_items : (() => { try { return JSON.parse(user.purchased_items || '[]'); } catch(e) { return []; } })();
           const currentTheme = user.theme || 'dark';
           
           const grid = document.getElementById('theme-grid');

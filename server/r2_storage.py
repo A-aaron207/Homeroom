@@ -1,7 +1,11 @@
 import os
 import io
 from flask import current_app
-from PIL import Image
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 try:
     import boto3
@@ -33,6 +37,8 @@ def get_r2_client():
 
 def compress_image(file_bytes, max_dim=1000, quality=82):
     """Compress image using Pillow before upload."""
+    if not PIL_AVAILABLE:
+        return file_bytes, None
     try:
         img = Image.open(io.BytesIO(file_bytes))
         if img.mode in ('RGBA', 'P'):

@@ -10,11 +10,11 @@ Homeroom.pages.chats = {
 
   async render() {
     return `
-      <div class="page-container page-chats fade-in" style="height:calc(100vh - 100px);display:flex;flex-direction:column;overflow:hidden;padding-bottom:0;">
-        <div style="margin-bottom:1rem;flex-shrink:0;">
+      <div class="page-container page-chats fade-in">
+        <div class="chats-header-title">
           <h1 style="font-size:2rem;font-weight:800;background:linear-gradient(to right,var(--accent,#6366f1),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0;">Messages</h1>
         </div>
-        <div class="chat-layout" style="display:flex;gap:0;flex:1;min-height:0;border-radius:1.25rem;border:1px solid rgba(255,255,255,0.07);overflow:hidden;background:rgba(0,0,0,0.15);">
+        <div id="chat-layout" class="chat-layout" style="display:flex;gap:0;flex:1;min-height:0;border-radius:1.25rem;border:1px solid rgba(255,255,255,0.07);overflow:hidden;background:rgba(0,0,0,0.15);">
           <!-- Sidebar -->
           <div id="chat-sidebar" style="width:300px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
             <div style="padding:1rem;border-bottom:1px solid rgba(255,255,255,0.07);">
@@ -41,6 +41,8 @@ Homeroom.pages.chats = {
         @keyframes fadeIn { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:translateY(0); } }
         @keyframes shimmer { 0%{background-position:-1000px 0} 100%{background-position:1000px 0} }
         .fade-in { animation: fadeIn 0.3s ease; }
+        .page-chats { height:calc(100vh - 100px);display:flex;flex-direction:column;overflow:hidden;padding-bottom:0; }
+        .chats-header-title { margin-bottom:1rem;flex-shrink:0; }
         .skeleton-line { background: linear-gradient(90deg,rgba(255,255,255,0.05) 25%,rgba(255,255,255,0.1) 50%,rgba(255,255,255,0.05) 75%); background-size:1000px 100%; animation:shimmer 2s infinite; border-radius:0.5rem; }
         .chat-item { padding:0.85rem;border-radius:0.6rem;cursor:pointer;transition:all 0.15s;display:flex;gap:0.75rem;align-items:center; }
         .chat-item:hover { background:rgba(255,255,255,0.06); }
@@ -69,6 +71,48 @@ Homeroom.pages.chats = {
         .delivery-icon { font-size:0.7rem;opacity:0.7;margin-left:4px; }
         .btn-premium { background:linear-gradient(135deg,var(--accent,#6366f1),#8b5cf6);border:none;color:white;font-weight:600;transition:all 0.2s; }
         .btn-premium:hover:not(:disabled) { opacity:0.9;transform:scale(1.02); }
+
+        @media (max-width: 768px) {
+          .page-chats {
+            height: calc(100dvh - 120px) !important;
+            padding: 0 !important;
+          }
+          .chats-header-title {
+            display: none !important;
+          }
+          .chat-layout {
+            border-radius: 0.75rem !important;
+            border: 1px solid rgba(255,255,255,0.07) !important;
+            height: 100% !important;
+          }
+          .chat-layout:not(.has-active-chat) #chat-sidebar {
+            display: flex !important;
+            width: 100% !important;
+            border-right: none !important;
+          }
+          .chat-layout:not(.has-active-chat) #chat-main {
+            display: none !important;
+          }
+          .chat-layout.has-active-chat #chat-sidebar {
+            display: none !important;
+          }
+          .chat-layout.has-active-chat #chat-main {
+            display: flex !important;
+            width: 100% !important;
+          }
+          .chat-back-btn {
+            display: flex !important;
+          }
+          .msg-bubble {
+            max-width: 88% !important;
+          }
+        }
+
+        @media (min-width: 769px) {
+          .chat-back-btn {
+            display: none !important;
+          }
+        }
       </style>
     `;
   },
@@ -157,9 +201,32 @@ Homeroom.pages.chats = {
     }).join('');
   },
 
+  closeChat() {
+    this.currentChatId = null;
+    this._replyTo = null;
+    const layout = document.getElementById('chat-layout');
+    if (layout) layout.classList.remove('has-active-chat');
+    document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+    const main = document.getElementById('chat-main');
+    if (main) {
+      main.innerHTML = `
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;color:var(--text-muted,#718096);">
+          <div style="font-size:4rem;opacity:0.5;">💬</div>
+          <p style="font-size:1.1rem;">Select a conversation</p>
+        </div>
+      `;
+    }
+  },
+
   async openChat(id) {
     this.currentChatId = id;
     this._replyTo = null;
+    const layout = document.getElementById('chat-layout');
+    if (layout) {
+      if (id) layout.classList.add('has-active-chat');
+      else layout.classList.remove('has-active-chat');
+    }
+
     const chat = this.conversations.find(c => c.id === id);
 
     document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
@@ -174,13 +241,16 @@ Homeroom.pages.chats = {
 
     main.innerHTML = `
       <!-- Header -->
-      <div style="padding:0.9rem 1.25rem;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:0.9rem;background:rgba(255,255,255,0.02);flex-shrink:0;">
+      <div style="padding:0.75rem 1rem;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;gap:0.6rem;background:rgba(255,255,255,0.02);flex-shrink:0;">
+        <button class="chat-back-btn" onclick="Homeroom.pages.chats.closeChat()" style="background:rgba(255,255,255,0.08);border:none;color:white;font-size:1.2rem;cursor:pointer;padding:0.4rem 0.7rem;border-radius:0.5rem;align-items:center;justify-content:center;margin-right:0.2rem;display:none;">
+          ←
+        </button>
         <div style="position:relative;flex-shrink:0;">
-          <div style="width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">${chat?.icon || '💬'}</div>
+          <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:1.4rem;">${chat?.icon || '💬'}</div>
         </div>
-        <div style="flex:1;">
-          <h3 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-primary,white);">${chat?.name || 'Chat'}</h3>
-          <div id="chat-status" style="font-size:0.78rem;color:var(--text-muted,#718096);">${chat?.type === 'dm' ? 'Direct Message' : 'Group Chat'}</div>
+        <div style="flex:1;min-width:0;">
+          <h3 style="margin:0;font-size:1rem;font-weight:700;color:var(--text-primary,white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${chat?.name || 'Chat'}</h3>
+          <div id="chat-status" style="font-size:0.78rem;color:var(--text-muted,#718096);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${chat?.type === 'dm' ? 'Direct Message' : 'Group Chat'}</div>
         </div>
         <div id="chat-typing" style="font-size:0.8rem;color:var(--accent,#6366f1);display:none;"></div>
       </div>
@@ -199,7 +269,7 @@ Homeroom.pages.chats = {
 
       <!-- Input -->
       <div style="padding:0.9rem 1.25rem;border-top:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.02);flex-shrink:0;">
-        <form id="chat-form" style="display:flex;gap:0.5rem;align-items:flex-end;">
+        <form id="chat-form" action="javascript:void(0);" onsubmit="return false;" style="display:flex;gap:0.5rem;align-items:flex-end;">
           <textarea id="chat-input" placeholder="Type a message..." rows="1"
             style="flex:1;padding:0.8rem 1rem;border-radius:1rem;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.25);color:white;resize:none;outline:none;font-family:inherit;line-height:1.4;max-height:120px;transition:border-color 0.2s;"></textarea>
           <button type="submit" class="btn btn-premium" style="padding:0.8rem 1.1rem;border-radius:1rem;flex-shrink:0;">
@@ -218,15 +288,17 @@ Homeroom.pages.chats = {
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+        const f = document.getElementById('chat-form');
+        if (f.requestSubmit) { f.requestSubmit(); } else { f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })); }
       }
     });
     input.focus();
 
-    document.getElementById('chat-form').addEventListener('submit', async (e) => {
+    const form = document.getElementById('chat-form');
+    form.onsubmit = async (e) => {
       e.preventDefault();
       const content = input.value.trim();
-      if (!content) return;
+      if (!content) return false;
       input.value = '';
       input.style.height = 'auto';
 
@@ -240,7 +312,8 @@ Homeroom.pages.chats = {
         Homeroom.toast('Failed to send message', 'error');
         input.value = content;
       }
-    });
+      return false;
+    };
 
     // Mark delivered then load
     Homeroom.API.post(`/conversations/${id}/delivered`).catch(() => {});
@@ -356,9 +429,10 @@ Homeroom.pages.chats = {
       container.scrollTop = container.scrollHeight;
     }
 
-    // Mark as read + delivered
-    Homeroom.API.post(`/conversations/${chatId}/read`).catch(() => {});
-    Homeroom.API.post(`/conversations/${chatId}/delivered`).catch(() => {});
+    if (!silent) {
+      Homeroom.API.post(`/conversations/${chatId}/read`).catch(() => {});
+      Homeroom.API.post(`/conversations/${chatId}/delivered`).catch(() => {});
+    }
   },
 
   _escapeHtml(str) {

@@ -17,7 +17,7 @@ def get_wallet():
     transactions = db.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC', (g.user['id'],)).fetchall()
     
     total_earned = sum(t['amount'] for t in transactions if t['type'] == 'earned')
-    total_spent = sum(t['amount'] for t in transactions if t['type'] == 'spent')
+    total_spent = sum(t['amount'] for t in transactions if t['type'] in ('spent', 'expense'))
     
     # Wealth rank
     rank = db.execute('SELECT COUNT(*) + 1 FROM users WHERE status = "approved" AND coins > ?', (user['coins'],)).fetchone()[0]

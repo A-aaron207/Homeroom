@@ -23,7 +23,7 @@ def create_app():
         GMAIL_USER=os.environ.get('GMAIL_USER', ''),
         GMAIL_APP_PASSWORD=os.environ.get('GMAIL_APP_PASSWORD', ''),
         SERVER_URL=os.environ.get('SERVER_URL', 'http://localhost:5000'),
-        DB_PATH=os.path.join(base_dir, 'homeroom.db'),
+        DB_PATH=os.environ.get('DB_PATH', os.path.join(base_dir, 'homeroom.db')),
         UPLOAD_FOLDER=os.path.join(base_dir, 'uploads'),
         MAX_FILE_SIZE=10 * 1024 * 1024,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
@@ -96,6 +96,10 @@ def create_app():
     @app.route('/auth.html')
     def serve_auth():
         return app.send_static_file('auth.html')
+
+    @app.route('/favicon.ico')
+    def serve_favicon():
+        return app.send_static_file('favicon.ico')
 
     @app.route('/approve.html')
     def serve_approve():

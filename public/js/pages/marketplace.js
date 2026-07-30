@@ -66,7 +66,7 @@ Homeroom.pages.marketplace = {
           
           if(userRes.success) {
               this.userCoins = userRes.data.user.coins;
-              this.userPurchases = JSON.parse(userRes.data.user.purchased_items || '[]');
+              this.userPurchases = Array.isArray(userRes.data.user.purchased_items) ? userRes.data.user.purchased_items : (() => { try { return JSON.parse(userRes.data.user.purchased_items || '[]'); } catch(e) { return []; } })();
               document.getElementById('shop-balance').innerText = this.userCoins;
           }
           
@@ -128,10 +128,10 @@ Homeroom.pages.marketplace = {
                             </div>
                             
                             ${isOwned ? `
-                                <button class="btn" style="padding: 0.5rem 1rem; border-radius: 0.5rem; background: rgba(255,255,255,0.1); color: var(--text-muted); cursor: not-allowed;" disabled>Owned</button>
+                                <button class="btn" style="padding: 0.6rem 1.25rem; border-radius: 2rem; background: rgba(255,255,255,0.08); color: var(--text-muted); font-size: 0.85rem; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed;" disabled>✓ Owned</button>
                             ` : `
-                                <button class="btn btn-premium" style="padding: 0.5rem 1rem; border-radius: 0.5rem; ${!canAfford ? 'opacity: 0.5; cursor: not-allowed; filter: grayscale(1);' : ''}" onclick="Homeroom.pages.marketplace.purchase('${item.id}', '${item.name}', ${item.price})" ${!canAfford ? 'disabled' : ''}>
-                                    Purchase
+                                <button class="btn btn-premium" style="padding: 0.6rem 1.25rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; ${!canAfford ? 'opacity: 0.4; cursor: not-allowed; filter: grayscale(1);' : ''}" onclick="Homeroom.pages.marketplace.purchase('${item.id}', '${item.name}', ${item.price})" ${!canAfford ? 'disabled' : ''}>
+                                    🛒 Purchase
                                 </button>
                             `}
                         </div>
@@ -164,6 +164,9 @@ Homeroom.pages.marketplace = {
           if(res.success) {
               Homeroom.toast('Purchase successful! Item added to inventory.', 'success');
               Homeroom.modal.close();
+              if (window.App && window.App.refreshUser) {
+                  window.App.refreshUser();
+              }
               this.loadShop();
           } else {
               Homeroom.toast(res.message || 'Purchase failed', 'error');
