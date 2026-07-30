@@ -14,24 +14,24 @@ Homeroom.pages.chats = {
         <div class="chats-header-title">
           <h1 style="font-size:2rem;font-weight:800;background:linear-gradient(to right,var(--accent,#6366f1),#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:0;">Messages</h1>
         </div>
-        <div id="chat-layout" class="chat-layout" style="display:flex;gap:0;flex:1;min-height:0;border-radius:1.25rem;border:1px solid rgba(255,255,255,0.07);overflow:hidden;background:rgba(0,0,0,0.15);">
+        <div id="chat-layout" class="chat-layout">
           <!-- Sidebar -->
-          <div id="chat-sidebar" style="width:300px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
-            <div style="padding:1rem;border-bottom:1px solid rgba(255,255,255,0.07);">
+          <div id="chat-sidebar" class="chat-sidebar">
+            <div style="padding:1rem;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
               <button id="btn-new-chat" class="btn btn-premium" style="width:100%;padding:0.75rem;border-radius:0.6rem;font-size:0.9rem;font-weight:600;">+ New Chat</button>
             </div>
-            <div style="padding:0.75rem;">
-              <input type="text" id="chat-search" placeholder="Search conversations..." style="width:100%;padding:0.6rem 0.9rem;border-radius:0.6rem;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:white;outline:none;font-size:0.9rem;">
+            <div style="padding:0.75rem;flex-shrink:0;">
+              <input type="text" id="chat-search" placeholder="Search conversations..." style="width:100%;box-sizing:border-box;min-width:0;padding:0.6rem 0.9rem;border-radius:0.6rem;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:white;outline:none;font-size:0.9rem;">
             </div>
-            <div id="conversations-list" style="flex:1;overflow-y:auto;padding:0.25rem 0.5rem;">
+            <div id="conversations-list" style="flex:1;overflow-y:auto;padding:0.25rem 0.5rem;min-height:0;">
               ${this._skeletonConvs()}
             </div>
           </div>
           <!-- Main Area -->
-          <div id="chat-main" style="flex:1;display:flex;flex-direction:column;background:rgba(0,0,0,0.08);">
-            <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;color:var(--text-muted,#718096);">
+          <div id="chat-main" class="chat-main">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;color:var(--text-muted,#718096);padding:2rem;text-align:center;">
               <div style="font-size:4rem;opacity:0.5;">💬</div>
-              <p style="font-size:1.1rem;">Select a conversation</p>
+              <p style="font-size:1.1rem;margin:0;">Select a conversation to start chatting</p>
             </div>
           </div>
         </div>
@@ -44,11 +44,14 @@ Homeroom.pages.chats = {
         .page-chats { height:calc(100vh - 100px);display:flex;flex-direction:column;overflow:hidden;padding-bottom:0; }
         .chats-header-title { margin-bottom:1rem;flex-shrink:0; }
         .skeleton-line { background: linear-gradient(90deg,rgba(255,255,255,0.05) 25%,rgba(255,255,255,0.1) 50%,rgba(255,255,255,0.05) 75%); background-size:1000px 100%; animation:shimmer 2s infinite; border-radius:0.5rem; }
+        .chat-layout { display:flex;gap:0;flex:1;min-height:0;border-radius:1.25rem;border:1px solid rgba(255,255,255,0.07);overflow:hidden;background:rgba(0,0,0,0.15);width:100%; }
+        .chat-sidebar { width:320px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.07);flex-shrink:0;box-sizing:border-box; }
+        .chat-main { flex:1;display:flex;flex-direction:column;background:rgba(0,0,0,0.08);min-width:0;box-sizing:border-box; }
         .chat-item { padding:0.85rem;border-radius:0.6rem;cursor:pointer;transition:all 0.15s;display:flex;gap:0.75rem;align-items:center; }
         .chat-item:hover { background:rgba(255,255,255,0.06); }
         .chat-item.active { background:rgba(99,102,241,0.15);border-left:3px solid var(--accent,#6366f1); }
         .msg-row { display:flex;flex-direction:column;width:100%;margin-bottom:0.25rem;animation:fadeIn 0.2s ease; }
-        .msg-bubble { max-width:72%;padding:0.75rem 1rem;border-radius:1rem;position:relative;word-wrap:break-word;line-height:1.5; }
+        .msg-bubble { max-width:72%;padding:0.75rem 1rem;border-radius:1rem;position:relative;word-wrap:break-word;word-break:break-word;line-height:1.5; }
         .msg-own { background:var(--accent,#6366f1);color:white;align-self:flex-end;border-bottom-right-radius:0.2rem; }
         .msg-other { background:rgba(255,255,255,0.1);color:var(--text-primary,white);align-self:flex-start;border-bottom-left-radius:0.2rem; }
         .msg-deleted { opacity:0.5;font-style:italic; }
@@ -71,40 +74,49 @@ Homeroom.pages.chats = {
         .delivery-icon { font-size:0.7rem;opacity:0.7;margin-left:4px; }
         .btn-premium { background:linear-gradient(135deg,var(--accent,#6366f1),#8b5cf6);border:none;color:white;font-weight:600;transition:all 0.2s; }
         .btn-premium:hover:not(:disabled) { opacity:0.9;transform:scale(1.02); }
+        .fab-container, .fab-main, #fab-container { display:none !important; }
 
         @media (max-width: 768px) {
           .page-chats {
             height: calc(100dvh - 120px) !important;
+            max-height: calc(100vh - 120px) !important;
             padding: 0 !important;
+            margin: 0 !important;
           }
           .chats-header-title {
             display: none !important;
           }
           .chat-layout {
-            border-radius: 0.75rem !important;
-            border: 1px solid rgba(255,255,255,0.07) !important;
+            border-radius: 0.5rem !important;
+            border: none !important;
             height: 100% !important;
+            width: 100% !important;
           }
-          .chat-layout:not(.has-active-chat) #chat-sidebar {
+          .chat-layout:not(.has-active-chat) .chat-sidebar {
             display: flex !important;
             width: 100% !important;
+            height: 100% !important;
+            flex: 1 !important;
             border-right: none !important;
           }
-          .chat-layout:not(.has-active-chat) #chat-main {
+          .chat-layout:not(.has-active-chat) .chat-main {
             display: none !important;
           }
-          .chat-layout.has-active-chat #chat-sidebar {
+          .chat-layout.has-active-chat .chat-sidebar {
             display: none !important;
           }
-          .chat-layout.has-active-chat #chat-main {
+          .chat-layout.has-active-chat .chat-main {
             display: flex !important;
             width: 100% !important;
+            height: 100% !important;
+            flex: 1 !important;
+            min-width: 0 !important;
           }
           .chat-back-btn {
             display: flex !important;
           }
           .msg-bubble {
-            max-width: 88% !important;
+            max-width: 85% !important;
           }
         }
 
@@ -268,11 +280,11 @@ Homeroom.pages.chats = {
       </div>
 
       <!-- Input -->
-      <div style="padding:0.9rem 1.25rem;border-top:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.02);flex-shrink:0;">
-        <form id="chat-form" action="javascript:void(0);" onsubmit="return false;" style="display:flex;gap:0.5rem;align-items:flex-end;">
+      <div style="padding:0.75rem 1rem;border-top:1px solid rgba(255,255,255,0.07);background:rgba(255,255,255,0.02);flex-shrink:0;width:100%;box-sizing:border-box;">
+        <form id="chat-form" action="javascript:void(0);" onsubmit="return false;" style="display:flex;gap:0.5rem;align-items:flex-end;width:100%;min-width:0;box-sizing:border-box;">
           <textarea id="chat-input" placeholder="Type a message..." rows="1"
-            style="flex:1;padding:0.8rem 1rem;border-radius:1rem;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.25);color:white;resize:none;outline:none;font-family:inherit;line-height:1.4;max-height:120px;transition:border-color 0.2s;"></textarea>
-          <button type="submit" class="btn btn-premium" style="padding:0.8rem 1.1rem;border-radius:1rem;flex-shrink:0;">
+            style="flex:1;min-width:0;width:100%;box-sizing:border-box;padding:0.75rem 1rem;border-radius:1rem;border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.3);color:white;resize:none;outline:none;font-family:inherit;font-size:0.95rem;line-height:1.4;max-height:120px;word-break:break-word;overflow-wrap:break-word;"></textarea>
+          <button type="submit" class="btn btn-premium" style="padding:0.75rem 1rem;border-radius:1rem;flex-shrink:0;height:42px;display:flex;align-items:center;justify-content:center;">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
           </button>
         </form>

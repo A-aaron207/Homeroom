@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homeroom-v3';
+const CACHE_NAME = 'homeroom-v4';
 const STATIC_ASSETS = [
     '/',
     '/index.html',

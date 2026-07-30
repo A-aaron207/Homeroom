@@ -1061,15 +1061,6 @@ textarea {
 
 /* Responsive Breakpoints */
 @media (max-width: 1024px) {
-  .chat-container {
-    flex-direction: column;
-  }
-  .chat-sidebar {
-    width: 100%;
-    height: 30%;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
   .grid-cols-3, .grid-cols-4 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
