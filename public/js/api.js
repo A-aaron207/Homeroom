@@ -29,16 +29,47 @@ Homeroom.API = {
     const currentUid = currentUser ? currentUser.uid : localStorage.getItem('homeroom_uid');
 
     try {
+      // Helper for friendly Firebase Auth error messages
+      const getFriendlyAuthError = (err) => {
+        if (!err || !err.code) return (err && err.message) ? err.message.replace(/^Firebase:\s*/, '') : 'Authentication failed';
+        switch (err.code) {
+          case 'auth/invalid-email':
+            return 'Please enter a valid email address.';
+          case 'auth/email-already-in-use':
+            return 'An account with this email address already exists.';
+          case 'auth/weak-password':
+            return 'Password must be at least 6 characters long.';
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            return 'Invalid email/username or password.';
+          case 'auth/too-many-requests':
+            return 'Too many failed login attempts. Please try again later.';
+          default:
+            return err.message ? err.message.replace(/^Firebase:\s*/, '') : 'Authentication failed';
+        }
+      };
+
       // 1. Auth Signup
       if (path === '/auth/signup' && method === 'POST') {
-        const email = body.username.includes('@') ? body.username : `${body.username.replace(/[^a-zA-Z0-9]/g, '')}@homeroom.app`;
-        const userCred = await auth.createUserWithEmailAndPassword(email, body.password);
+        const email = (body.email || body.username || '').trim();
+        const username = (body.username || '').trim().replace(/^@/, '');
+        const displayName = (body.displayName || username).trim();
+
+        let userCred;
+        try {
+          userCred = await auth.createUserWithEmailAndPassword(email, body.password);
+        } catch (signupErr) {
+          return { success: false, message: getFriendlyAuthError(signupErr) };
+        }
+
         const uid = userCred.user.uid;
         
         const userData = {
           id: uid,
-          username: body.username,
-          display_name: body.displayName || body.username,
+          email: email,
+          username: username,
+          display_name: displayName,
           avatar_emoji: body.avatarEmoji || '🎓',
           avatar_bg: '',
           bio: body.bio || '',
@@ -47,6 +78,8 @@ Homeroom.API = {
           coins: 100,
           streak_current: 1,
           streak_longest: 1,
+          achievements: [],
+          purchased_items: [],
           last_login_date: new Date().toISOString(),
           status: 'approved',
           role: 'member',
@@ -59,25 +92,28 @@ Homeroom.API = {
 
         this.setToken(uid);
         localStorage.setItem('homeroom_uid', uid);
-        return { success: true, message: 'Account created', data: { token: uid, user: userData } };
+        return { success: true, message: '🎉 Welcome to Homeroom! Your account has been created successfully.', data: { token: uid, user: userData } };
       }
 
-      // 2. Auth Login
+      // 2. Auth Login (Supports Email OR @username)
       if (path === '/auth/login' && method === 'POST') {
-        const email = body.username.includes('@') ? body.username : `${body.username.replace(/[^a-zA-Z0-9]/g, '')}@homeroom.app`;
+        const input = (body.email || body.username || '').trim();
+        let loginEmail = input;
+
+        // If user entered a username instead of an email, look up their email in Firestore
+        if (!input.includes('@')) {
+          const handle = input.replace(/^@/, '');
+          const snap = await db.collection('users').where('username', '==', handle).get();
+          if (!snap.empty) {
+            loginEmail = snap.docs[0].data().email || `${handle}@homeroom.app`;
+          }
+        }
+
         let userCred;
         try {
-          userCred = await auth.signInWithEmailAndPassword(email, body.password);
-        } catch (authErr) {
-          // Fallback search by username in firestore
-          const snap = await db.collection('users').where('username', '==', body.username).get();
-          if (!snap.empty) {
-            const userDoc = snap.docs[0];
-            const realEmail = userDoc.data().email || `${body.username}@homeroom.app`;
-            userCred = await auth.signInWithEmailAndPassword(realEmail, body.password);
-          } else {
-            throw authErr;
-          }
+          userCred = await auth.signInWithEmailAndPassword(loginEmail, body.password);
+        } catch (loginErr) {
+          return { success: false, message: getFriendlyAuthError(loginErr) };
         }
 
         const uid = userCred.user.uid;
@@ -85,7 +121,7 @@ Homeroom.API = {
         localStorage.setItem('homeroom_uid', uid);
 
         const userSnap = await db.collection('users').doc(uid).get();
-        const userData = userSnap.exists ? userSnap.data() : { id: uid, username: body.username };
+        const userData = userSnap.exists ? userSnap.data() : { id: uid, email: loginEmail, username: input };
 
         return { success: true, message: 'Login successful', data: { token: uid, user: userData } };
       }

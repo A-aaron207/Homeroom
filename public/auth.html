@@ -39,8 +39,8 @@
             <div id="login-form" class="auth-form-container active">
                 <form id="loginForm">
                     <div class="form-group">
-                        <label for="login-username">Username</label>
-                        <input type="text" id="login-username" required placeholder="@username">
+                        <label for="login-username">Email or Username</label>
+                        <input type="text" id="login-username" required placeholder="you@example.com or @handle">
                     </div>
                     <div class="form-group">
                         <label for="login-password">Password</label>
@@ -60,6 +60,10 @@
                         </div>
                         <input type="hidden" id="signup-avatar" value="🎓">
                     </div>
+                    <div class="form-group">
+                        <label for="signup-email">Email Address</label>
+                        <input type="email" id="signup-email" required placeholder="you@example.com">
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="signup-username">Username</label>
@@ -72,12 +76,12 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="signup-password">Password</label>
-                            <input type="password" id="signup-password" required placeholder="••••••••">
+                            <label for="signup-password">Password (6+ chars)</label>
+                            <input type="password" id="signup-password" required minlength="6" placeholder="••••••••">
                         </div>
                         <div class="form-group">
                             <label for="signup-confirm-password">Confirm Password</label>
-                            <input type="password" id="signup-confirm-password" required placeholder="••••••••">
+                            <input type="password" id="signup-confirm-password" required minlength="6" placeholder="••••••••">
                         </div>
                     </div>
                     <div class="form-group">
@@ -85,7 +89,7 @@
                         <input type="text" id="signup-roll" placeholder="e.g. 2026-CS-001">
                     </div>
                     <div class="form-group">
-                        <label for="signup-bio">Bio</label>
+                        <label for="signup-bio">Bio (Optional)</label>
                         <textarea id="signup-bio" rows="2" placeholder="A little about yourself..."></textarea>
                     </div>
                     <div id="signup-message" class="message" style="display: none;"></div>
@@ -143,10 +147,19 @@
                 errorDiv.style.display = 'none';
                 
                 try {
-                    const username = document.getElementById('login-username').value;
+                    const username = document.getElementById('login-username').value.trim();
                     const password = document.getElementById('login-password').value;
                     
-                    const res = await Homeroom.API.post('/auth/login', { username, password });
+                    if (!username) {
+                        errorDiv.style.display = 'block';
+                        errorDiv.textContent = 'Please enter your email address or username.';
+                        errorDiv.className = 'message error';
+                        btn.disabled = false;
+                        btn.textContent = 'Login';
+                        return;
+                    }
+
+                    const res = await Homeroom.API.post('/auth/login', { username, email: username, password });
                     
                     if (res.success) {
                         Homeroom.API.setToken(res.data.token);
@@ -171,8 +184,26 @@
                 const btn = e.target.querySelector('button');
                 const msgDiv = document.getElementById('signup-message');
                 
+                const email = document.getElementById('signup-email').value.trim();
+                const username = document.getElementById('signup-username').value.trim();
+                const displayName = document.getElementById('signup-display-name').value.trim();
                 const password = document.getElementById('signup-password').value;
                 const confirm = document.getElementById('signup-confirm-password').value;
+
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    msgDiv.style.display = 'block';
+                    msgDiv.textContent = 'Please enter a valid email address.';
+                    msgDiv.className = 'message error';
+                    return;
+                }
+
+                if (password.length < 6) {
+                    msgDiv.style.display = 'block';
+                    msgDiv.textContent = 'Password must be at least 6 characters long.';
+                    msgDiv.className = 'message error';
+                    return;
+                }
                 
                 if (password !== confirm) {
                     msgDiv.style.display = 'block';
@@ -187,11 +218,12 @@
                 
                 try {
                     const data = {
-                        username: document.getElementById('signup-username').value,
-                        displayName: document.getElementById('signup-display-name').value,
+                        email: email,
+                        username: username,
+                        displayName: displayName,
                         password: password,
-                        rollNumber: document.getElementById('signup-roll').value,
-                        bio: document.getElementById('signup-bio').value,
+                        rollNumber: document.getElementById('signup-roll').value.trim(),
+                        bio: document.getElementById('signup-bio').value.trim(),
                         avatarEmoji: hiddenInput.value
                     };
                     
@@ -199,7 +231,12 @@
                     
                     if (res.success && res.data && res.data.token) {
                         Homeroom.API.setToken(res.data.token);
-                        window.location.href = 'index.html';
+                        msgDiv.style.display = 'block';
+                        msgDiv.textContent = res.message || '🎉 Welcome to Homeroom! Your account has been created successfully.';
+                        msgDiv.className = 'message success';
+                        setTimeout(() => {
+                            window.location.href = 'index.html';
+                        }, 1000);
                     } else {
                         msgDiv.style.display = 'block';
                         msgDiv.textContent = res.message || 'Signup failed';
