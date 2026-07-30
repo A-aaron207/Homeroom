@@ -2,12 +2,13 @@ window.Homeroom = window.Homeroom || {};
 
 // Firebase configuration (Replace with your Firebase Console credentials if needed)
 const firebaseConfig = window.FIREBASE_CONFIG || {
-  apiKey: "AIzaSyDemoKeyHomeroomApp2026Firebase",
-  authDomain: "homeroom-app.firebaseapp.com",
-  projectId: "homeroom-app",
-  storageBucket: "homeroom-app.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef123456"
+  apiKey: "AIzaSyBlLFFFtIKWjkOtQZJGg79nW3RRzDWQ4-U",
+  authDomain: "homeroom-7dde3.firebaseapp.com",
+  projectId: "homeroom-7dde3",
+  storageBucket: "homeroom-7dde3.firebasestorage.app",
+  messagingSenderId: "887765100842",
+  appId: "1:887765100842:web:da005d3c53c372fac4d653",
+  measurementId: "G-C6HPMFZ1D2"
 };
 
 // Initialize Firebase
