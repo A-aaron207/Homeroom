@@ -42,37 +42,38 @@ Homeroom.API = {
       }
     }
 
-    try {
-      // Helper for friendly Firebase Auth error messages
-      const getFriendlyAuthError = (err) => {
-        if (!err) return 'Authentication failed';
-        const code = err.code || '';
-        const msg = err.message || '';
+    // Helper for friendly Firebase Auth error messages
+    const getFriendlyAuthError = (err) => {
+      if (!err) return 'Authentication failed';
+      const code = err.code || '';
+      const msg = err.message || '';
 
-        if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain') || msg.includes('unauthorized domain')) {
-          const currentHost = window.location.hostname || 'your domain';
-          return `Domain "${currentHost}" is not authorized in Firebase Console. Please add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
-        }
-        if (code === 'auth/invalid-email') {
-          return 'Please enter a valid email address.';
-        }
-        if (code === 'auth/email-already-in-use') {
-          return 'An account with this email address already exists.';
-        }
-        if (code === 'auth/weak-password') {
-          return 'Password must be at least 6 characters long.';
-        }
-        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-          return 'Invalid email/username or password.';
-        }
-        if (code === 'auth/too-many-requests') {
-          return 'Too many failed login attempts. Please try again later.';
-        }
-        if (code === 'auth/network-request-failed' || msg.includes('network-request-failed')) {
-          return 'Network error connecting to Firebase. Check internet connection and ensure your domain is authorized in Firebase Console.';
-        }
-        return msg ? msg.replace(/^Firebase:\s*/, '') : 'Authentication failed';
-      };
+      if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain') || msg.includes('unauthorized domain')) {
+        const currentHost = window.location.hostname || 'your domain';
+        return `Domain "${currentHost}" is not authorized in Firebase Console. Please add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+      }
+      if (code === 'auth/invalid-email') {
+        return 'Please enter a valid email address.';
+      }
+      if (code === 'auth/email-already-in-use') {
+        return 'An account with this email address already exists.';
+      }
+      if (code === 'auth/weak-password') {
+        return 'Password must be at least 6 characters long.';
+      }
+      if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        return 'Invalid email/username or password.';
+      }
+      if (code === 'auth/too-many-requests') {
+        return 'Too many failed login attempts. Please try again later.';
+      }
+      if (code === 'auth/network-request-failed' || msg.includes('network-request-failed')) {
+        return 'Network error connecting to Firebase. Check internet connection and ensure your domain is authorized in Firebase Console.';
+      }
+      return msg ? msg.replace(/^Firebase:\s*/, '') : 'Authentication failed';
+    };
+
+    try {
 
       // Safe Firestore get with cache fallback
       const safeGet = async (ref) => {
