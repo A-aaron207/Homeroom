@@ -332,62 +332,80 @@ Homeroom.pages.home = {
 
   _bindDailyButtons(status) {
     const btnCheckin = document.getElementById('btn-checkin');
-    if (btnCheckin && !status.todayCheckedIn) {
-      btnCheckin.addEventListener('click', async () => {
+    const isCheckedIn = status.todayCheckedIn || status.checked_in_today;
+    
+    if (btnCheckin) {
+      if (isCheckedIn) {
         btnCheckin.disabled = true;
-        btnCheckin.innerHTML = '<span style="display:inline-block;width:1rem;height:1rem;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></span>';
-        try {
-          const res = await Homeroom.API.post('/daily/checkin');
-          if (res.success) {
-            Homeroom.toast('✅ Checked in! Streak continues!', 'success');
-            setTimeout(() => Homeroom.pages.home.init(), 800);
-          } else {
-            Homeroom.toast(res.message || 'Already checked in', 'info');
+        btnCheckin.innerHTML = '✅ Checked In';
+      } else {
+        btnCheckin.addEventListener('click', async () => {
+          btnCheckin.disabled = true;
+          btnCheckin.innerHTML = '<span style="display:inline-block;width:1rem;height:1rem;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></span>';
+          try {
+            const res = await Homeroom.API.post('/daily/checkin');
+            if (res.success) {
+              Homeroom.toast(res.message || '✅ Checked in! Streak updated!', 'success');
+              btnCheckin.innerHTML = '✅ Checked In';
+              setTimeout(() => {
+                if (Homeroom.pages.home._loadDashboard) Homeroom.pages.home._loadDashboard();
+              }, 600);
+            } else {
+              Homeroom.toast(res.message || 'Already checked in today', 'info');
+              btnCheckin.disabled = true;
+              btnCheckin.innerHTML = '✅ Checked In';
+            }
+          } catch (e) {
+            Homeroom.toast('Network error', 'error');
             btnCheckin.disabled = false;
             btnCheckin.innerHTML = '📅 Check In';
           }
-        } catch (e) {
-          Homeroom.toast('Network error', 'error');
-          btnCheckin.disabled = false;
-          btnCheckin.innerHTML = '📅 Check In';
-        }
-      });
+        });
+      }
     }
 
     const btnSpin = document.getElementById('btn-spin');
-    if (btnSpin && status.canSpin) {
-      btnSpin.addEventListener('click', async () => {
+    const canSpin = (status.canSpin !== undefined) ? status.canSpin : status.can_spin;
+    if (btnSpin) {
+      if (!canSpin) {
         btnSpin.disabled = true;
-        btnSpin.innerHTML = '<span style="display:inline-block;width:1rem;height:1rem;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></span>';
-        try {
-          const res = await Homeroom.API.post('/daily/spin');
-          if (res.success) {
-            const data = res.data || {};
-            const isNothing = data.reward_type === 'nothing' || data.reward_amount === 0;
-            const icon = isNothing ? '😅' : '🎉';
-            const title = isNothing ? 'Better Luck Next Time!' : 'You Won!';
-            const rewardLabel = isNothing ? 'Try Again Tomorrow!' : `+${data.reward_amount} ${data.reward_type === 'coins' ? 'ClassCoins (CC)' : 'XP'}`;
+        btnSpin.innerHTML = '⏳ Tomorrow';
+      } else {
+        btnSpin.addEventListener('click', async () => {
+          btnSpin.disabled = true;
+          btnSpin.innerHTML = '<span style="display:inline-block;width:1rem;height:1rem;border:2px solid white;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;"></span>';
+          try {
+            const res = await Homeroom.API.post('/daily/spin');
+            if (res.success) {
+              const resData = res.data || {};
+              const reward = resData.reward || resData;
+              const isNothing = reward.type === 'nothing' || reward.amount === 0;
+              const icon = isNothing ? '😅' : '🎉';
+              const title = isNothing ? 'Better Luck Next Time!' : 'You Won!';
+              const rewardLabel = reward.label || (isNothing ? 'Try Again Tomorrow!' : `+${reward.amount} ${reward.type === 'coins' ? 'ClassCoins (CC)' : 'XP'}`);
 
-            Homeroom.modal.open('🎡 Spin Result!', `
-              <div style="text-align:center;padding:2rem;">
-                <div style="font-size:5rem;margin-bottom:1rem;">${icon}</div>
-                <h2 style="margin:0 0 0.5rem 0;font-size:1.5rem;">${title}</h2>
-                <p style="font-size:1.8rem;color:var(--accent,#6366f1);font-weight:800;margin:0.5rem 0;">
-                  ${rewardLabel}
-                </p>
-                <p style="color:var(--text-muted,#718096);font-size:0.9rem;">Keep spinning daily for bigger rewards!</p>
-              </div>
-            `, '<button onclick="Homeroom.modal.close();Homeroom.pages.home.init();" class="btn btn-premium" style="width:100%;padding:1rem;border-radius:0.5rem;">Got it! 🚀</button>');
-          } else {
-            Homeroom.toast(res.message || 'Already spun today', 'info');
-            btnSpin.innerHTML = '⏳ Tomorrow';
+              Homeroom.modal.open('🎡 Spin Result!', `
+                <div style="text-align:center;padding:2rem;">
+                  <div style="font-size:5rem;margin-bottom:1rem;">${icon}</div>
+                  <h2 style="margin:0 0 0.5rem 0;font-size:1.5rem;">${title}</h2>
+                  <p style="font-size:1.8rem;color:var(--accent,#6366f1);font-weight:800;margin:0.5rem 0;">
+                    ${rewardLabel}
+                  </p>
+                  <p style="color:var(--text-muted,#718096);font-size:0.9rem;">Keep spinning daily for bigger rewards!</p>
+                </div>
+              `, '<button onclick="Homeroom.modal.close();if(Homeroom.pages.home._loadDashboard)Homeroom.pages.home._loadDashboard();" class="btn btn-premium" style="width:100%;padding:1rem;border-radius:0.5rem;">Got it! 🚀</button>');
+            } else {
+              Homeroom.toast(res.message || 'Already spun today', 'info');
+              btnSpin.disabled = true;
+              btnSpin.innerHTML = '⏳ Tomorrow';
+            }
+          } catch (e) {
+            Homeroom.toast('Network error', 'error');
+            btnSpin.disabled = false;
+            btnSpin.innerHTML = '🎡 Spin';
           }
-        } catch (e) {
-          Homeroom.toast('Network error', 'error');
-          btnSpin.disabled = false;
-          btnSpin.innerHTML = '🎡 Spin';
-        }
-      });
+        });
+      }
     }
   },
 

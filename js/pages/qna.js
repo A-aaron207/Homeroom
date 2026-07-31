@@ -47,7 +47,7 @@ Homeroom.pages.qna = {
     this.currentSort = 'newest';
     this.currentSearch = '';
     
-    const subjects = ['All', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Geography', 'History'];
+    const subjects = ['All', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Hindi', 'Computer Science', 'History', 'Geography', 'Economics'];
     const chipsContainer = document.getElementById('qna-subject-chips');
     
     if(chipsContainer) {

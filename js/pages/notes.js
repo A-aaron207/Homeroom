@@ -47,7 +47,7 @@ Homeroom.pages.notes = {
     this.currentSearch = '';
     this.showBookmarked = false;
     
-    const subjects = ['All', 'Physics', 'Chemistry', 'Biology', 'Mathematics', 'Geography', 'History'];
+    const subjects = ['All', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'Hindi', 'Computer Science', 'History', 'Geography', 'Economics'];
     const chipsContainer = document.getElementById('subject-chips');
     
     if(chipsContainer) {

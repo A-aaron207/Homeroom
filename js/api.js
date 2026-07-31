@@ -75,15 +75,17 @@ Homeroom.API = {
 
     try {
 
-      // Safe Firestore get with cache fallback
+      // Safe Firestore get with live server preference
       const safeGet = async (ref) => {
+        if (!ref) return null;
         try {
-          return await ref.get();
-        } catch (e) {
+          return await ref.get({ source: 'server' });
+        } catch (serverErr) {
           try {
-            return await ref.get({ source: 'cache' });
-          } catch (e2) {
-            throw e;
+            return await ref.get();
+          } catch (cacheErr) {
+            console.warn('Firestore fetch fallback:', cacheErr);
+            throw serverErr;
           }
         }
       };
@@ -487,15 +489,58 @@ Homeroom.API = {
         return { success: true, message: 'Question posted successfully!', data: qData };
       }
 
-      // 8. Tasks
+      // 8. Tasks (Auto-seed if empty)
       if (path.startsWith('/tasks') && method === 'GET') {
-        let snap;
+        let tasks = [];
         try {
-          snap = await db.collection('tasks').get();
+          const snap = await db.collection('tasks').get();
+          tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         } catch(e) {
-          snap = { docs: [] };
+          tasks = [];
         }
-        const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        if (tasks.length === 0 && db) {
+          const defaultTasks = [
+            {
+              id: 'task_welcome',
+              title: '🎓 Complete Your Profile',
+              description: 'Update your display name, roll number, and bio in Settings to get recognized by classmates.',
+              reward_coins: 50,
+              reward_xp: 100,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'task_note',
+              title: '📚 Share Class Study Notes',
+              description: 'Upload a PDF or image of your subject notes to help classmates in the Notes section.',
+              reward_coins: 40,
+              reward_xp: 80,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'task_qna',
+              title: '❓ Answer a Classmate Doubt',
+              description: 'Head over to the Q&A Forum and provide a helpful answer to any student doubt.',
+              reward_coins: 30,
+              reward_xp: 60,
+              created_at: new Date().toISOString()
+            },
+            {
+              id: 'task_streak',
+              title: '🔥 Build a 3-Day Study Streak',
+              description: 'Log in and check in for 3 consecutive days to build your study habit.',
+              reward_coins: 60,
+              reward_xp: 120,
+              created_at: new Date().toISOString()
+            }
+          ];
+
+          for (const t of defaultTasks) {
+            await db.collection('tasks').doc(t.id).set(t, { merge: true }).catch(() => {});
+          }
+          tasks = defaultTasks;
+        }
+
         return { success: true, data: tasks };
       }
 
@@ -539,22 +584,75 @@ Homeroom.API = {
         return { success: true, data: users };
       }
 
-      // 10. Daily Checkin & Spin
+      // 10. Daily Checkin & Spin (Real Date-based streak calculation)
       if (path === '/daily/checkin' && method === 'POST') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const uRef = db.collection('users').doc(currentUid);
         const uSnap = await uRef.get();
         const uData = uSnap.data() || {};
-        const streak = (uData.streak_current || 0) + 1;
+
+        const getLocalDateStr = (d) => {
+          const date = d ? new Date(d) : new Date();
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        };
+
+        const todayStr = getLocalDateStr(new Date());
+        const lastCheckinStr = uData.last_checkin_date ? getLocalDateStr(uData.last_checkin_date) : null;
+
+        if (lastCheckinStr === todayStr) {
+          return { success: false, message: '📅 You have already checked in today! Come back tomorrow.' };
+        }
+
+        let newStreak = 1;
+        if (lastCheckinStr) {
+          const d1 = new Date(lastCheckinStr + 'T00:00:00Z');
+          const d2 = new Date(todayStr + 'T00:00:00Z');
+          const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays === 1) {
+            newStreak = (uData.streak_current || 0) + 1;
+          } else if (diffDays > 1) {
+            newStreak = 1;
+          }
+        }
+
+        const rewardCoins = 20 + Math.min(newStreak * 5, 50);
+        const rewardXp = 40 + Math.min(newStreak * 10, 100);
+
         await uRef.update({
-          streak_current: streak,
-          last_login_date: new Date().toISOString()
+          streak_current: newStreak,
+          streak_longest: Math.max(newStreak, uData.streak_longest || 1),
+          coins: firebase.firestore.FieldValue.increment(rewardCoins),
+          coins_earned: firebase.firestore.FieldValue.increment(rewardCoins),
+          xp: firebase.firestore.FieldValue.increment(rewardXp),
+          last_checkin_date: new Date().toISOString()
         });
-        return { success: true, message: 'Checked in successfully!' };
+
+        return {
+          success: true,
+          message: `✅ Checked in! Day ${newStreak} Streak (+${rewardCoins} CC, +${rewardXp} XP)`,
+          data: { streak: newStreak, rewardCoins, rewardXp }
+        };
       }
 
       if (path === '/daily/spin' && method === 'POST') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
+        const uRef = db.collection('users').doc(currentUid);
+        const uSnap = await uRef.get();
+        const uData = uSnap.data() || {};
+
+        const getLocalDateStr = (d) => {
+          const date = d ? new Date(d) : new Date();
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        };
+
+        const todayStr = getLocalDateStr(new Date());
+        const lastSpinStr = uData.last_spin_date ? getLocalDateStr(uData.last_spin_date) : null;
+
+        if (lastSpinStr === todayStr) {
+          return { success: false, message: '🎡 You have already spun the wheel today! Come back tomorrow.' };
+        }
+
         const rewards = [
           { type: 'coins', amount: 50, label: '+50 ClassCoins 🪙' },
           { type: 'xp', amount: 100, label: '+100 XP ⚡' },
@@ -562,9 +660,6 @@ Homeroom.API = {
           { type: 'coins', amount: 200, label: '+200 ClassCoins 🪙' }
         ];
         const reward = rewards[Math.floor(Math.random() * rewards.length)];
-        const uRef = db.collection('users').doc(currentUid);
-        const uSnap = await uRef.get();
-        const uData = uSnap.data() || {};
 
         let newCoins = uData.coins || 0;
         let newXp = uData.xp || 0;
@@ -573,11 +668,20 @@ Homeroom.API = {
 
         await uRef.update({
           coins: newCoins,
+          coins_earned: firebase.firestore.FieldValue.increment(reward.type === 'coins' ? reward.amount : 0),
           xp: newXp,
           last_spin_date: new Date().toISOString()
         });
 
-        return { success: true, data: { reward } };
+        return {
+          success: true,
+          data: {
+            reward,
+            reward_type: reward.type,
+            reward_amount: reward.amount,
+            reward_label: reward.label
+          }
+        };
       }
 
       // 11. Users Listing
@@ -703,7 +807,31 @@ Homeroom.API = {
       if (path === '/daily/status' && method === 'GET') {
         const uSnap = currentUid ? await safeGet(db.collection('users').doc(currentUid)).catch(() => null) : null;
         const uData = uSnap && uSnap.exists ? uSnap.data() : {};
-        return { success: true, data: { checked_in_today: false, can_spin: true, streak: uData.streak_current || 1 } };
+        
+        const getLocalDateStr = (d) => {
+          const date = d ? new Date(d) : new Date();
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        };
+
+        const todayStr = getLocalDateStr(new Date());
+        const lastCheckinStr = uData.last_checkin_date ? getLocalDateStr(uData.last_checkin_date) : null;
+        const lastSpinStr = uData.last_spin_date ? getLocalDateStr(uData.last_spin_date) : null;
+
+        const checkedInToday = (lastCheckinStr === todayStr);
+        const canSpin = (lastSpinStr !== todayStr);
+        const currentStreak = uData.streak_current || 1;
+
+        return {
+          success: true,
+          data: {
+            todayCheckedIn: checkedInToday,
+            checked_in_today: checkedInToday,
+            canSpin: canSpin,
+            can_spin: canSpin,
+            streak: { current: currentStreak, longest: uData.streak_longest || currentStreak },
+            streak_current: currentStreak
+          }
+        };
       }
 
       if (path.startsWith('/announcements') && method === 'GET') {
