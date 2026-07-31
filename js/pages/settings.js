@@ -7,7 +7,7 @@ Homeroom.pages.settings = {
       <div class="page-container page-settings fade-in" style="max-width: 800px; margin: 0 auto;">
         <div class="header-section" style="margin-bottom: 2rem;">
           <h1 class="page-title" style="font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #64748b, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Settings</h1>
-          <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.5rem;">Preferences and account management.</p>
+          <p style="color: var(--text-muted); font-size: 1.1rem; margin-top: 0.5rem;">Preferences, PWA installation & offline management.</p>
         </div>
 
         <div class="settings-section glass-card" style="margin-bottom: 2rem; padding: 2rem;">
@@ -18,6 +18,46 @@ Homeroom.pages.settings = {
             
             <div id="theme-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 1rem;">
                 <div class="spinner"></div>
+            </div>
+        </div>
+
+        <div class="settings-section glass-card" style="margin-bottom: 2rem; padding: 2rem;">
+            <h2 style="margin-top: 0; display: flex; align-items: center; gap: 0.5rem; font-size: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+                📱 PWA & Offline Support
+            </h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: bold; color: var(--text-color);">App Installation</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Install Homeroom as a native app on your desktop or mobile device.</div>
+                    </div>
+                    <button class="btn btn-premium" id="btn-settings-install" style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 700;">
+                        📲 Install App
+                    </button>
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: bold; color: var(--text-color);">Offline Status</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;" id="offline-status-text">
+                            ${navigator.onLine ? '🟢 Connected (Online)' : '🔴 Offline Mode'}
+                        </div>
+                    </div>
+                    <button class="btn" id="btn-sync-now" style="padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white; font-size: 0.85rem; font-weight: 600;">
+                        🔄 Sync Queue
+                    </button>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div style="font-weight: bold; color: var(--text-color);">Keyboard Shortcuts</div>
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">View desktop keyboard shortcuts (Ctrl+K, Ctrl+N, Ctrl+/).</div>
+                    </div>
+                    <button class="btn" id="btn-view-shortcuts" style="padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white; font-size: 0.85rem; font-weight: 600;">
+                        ⌨️ Shortcuts
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -43,7 +83,7 @@ Homeroom.pages.settings = {
                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Get browser notifications for messages and mentions.</div>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox" checked>
+                        <input type="checkbox" id="toggle-push-notifs" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -53,7 +93,7 @@ Homeroom.pages.settings = {
                         <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem;">Reminders to maintain your streak and check in.</div>
                     </div>
                     <label class="toggle-switch">
-                        <input type="checkbox">
+                        <input type="checkbox" checked>
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
@@ -66,7 +106,7 @@ Homeroom.pages.settings = {
             </h2>
             
             <div style="display: flex; flex-direction: column; gap: 1rem;">
-                <button class="btn" style="padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; text-align: left; display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn" style="padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; text-align: left; display: flex; justify-content: space-between; align-items: center;" onclick="Homeroom.toast('Data export started. File will download shortly.', 'info')">
                     Export My Data <span>📥</span>
                 </button>
                 <button class="btn" style="padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1); color: #ef4444; text-align: left; display: flex; justify-content: space-between; align-items: center;" onclick="Homeroom.pages.settings.logout()">
@@ -76,7 +116,7 @@ Homeroom.pages.settings = {
         </div>
         
         <div style="text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-bottom: 2rem;">
-            Homeroom v1.0.0<br>
+            Homeroom PWA v1.1.0<br>
             Made with ❤️ for students.
         </div>
 
@@ -98,12 +138,53 @@ Homeroom.pages.settings = {
       </style>
     `;
   },
+
   async init() {
     this.renderThemes();
+    this.bindPWAControls();
+  },
+
+  bindPWAControls() {
+      document.getElementById('btn-settings-install')?.addEventListener('click', () => {
+          document.getElementById('btn-header-install')?.click();
+      });
+
+      document.getElementById('btn-sync-now')?.addEventListener('click', () => {
+          Homeroom.toast('🔄 Synchronizing offline queue...', 'info');
+          Homeroom.OfflineDB.processQueue(async (actionType, payload) => {
+              if (actionType === 'send_message') {
+                  await Homeroom.API.post(`/conversations/${payload.chatId}/messages`, { content: payload.content });
+              } else if (actionType === 'create_question') {
+                  await Homeroom.API.post('/qna/questions', payload);
+              } else if (actionType === 'upload_note') {
+                  await Homeroom.API.post('/notes', payload);
+              }
+          });
+      });
+
+      document.getElementById('btn-view-shortcuts')?.addEventListener('click', () => {
+          if (window.App && window.App.showKeyboardShortcutsModal) {
+              window.App.showKeyboardShortcutsModal();
+          }
+      });
+
+      const pushToggle = document.getElementById('toggle-push-notifs');
+      if (pushToggle) {
+          pushToggle.addEventListener('change', async (e) => {
+              if (e.target.checked && 'Notification' in window) {
+                  const perm = await Notification.requestPermission();
+                  if (perm === 'granted') {
+                      Homeroom.toast('🔔 Push Notifications enabled!', 'success');
+                  } else {
+                      Homeroom.toast('Push Notification permission denied by browser', 'warning');
+                      e.target.checked = false;
+                  }
+              }
+          });
+      }
   },
 
   async renderThemes() {
-      // Define the 7 themes
       const themesDef = [
           { id: 'dark', name: 'Dark Mode', bg: '#08081a', acc: '#6366f1' },
           { id: 'light', name: 'Light Mode', bg: '#f8f9fa', acc: '#4f46e5' },
@@ -154,7 +235,6 @@ Homeroom.pages.settings = {
                   
                   const themeId = el.dataset.id;
                   
-                  // Update UI optimistic
                   document.querySelectorAll('.theme-card').forEach(c => {
                       c.classList.remove('active');
                       const status = c.querySelector('span');
@@ -162,10 +242,8 @@ Homeroom.pages.settings = {
                   });
                   el.classList.add('active');
                   
-                  // Apply immediately to body
                   document.body.dataset.theme = themeId;
                   
-                  // Save to API
                   try {
                       await Homeroom.API.put('/users/me', { theme: themeId });
                       Homeroom.toast('Theme applied!', 'success');

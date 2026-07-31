@@ -12,6 +12,8 @@ def create_app():
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     public_dir = os.path.join(base_dir, 'public')
+    if not os.path.exists(public_dir):
+        public_dir = base_dir
 
     app = Flask(__name__, static_folder=public_dir, static_url_path='')
     app.url_map.strict_slashes = False
@@ -100,6 +102,30 @@ def create_app():
     @app.route('/favicon.ico')
     def serve_favicon():
         return app.send_static_file('favicon.ico')
+
+    @app.route('/favicon.png')
+    def serve_favicon_png():
+        return app.send_static_file('favicon.png')
+
+    @app.route('/favicon.svg')
+    def serve_favicon_svg():
+        return app.send_static_file('favicon.svg')
+
+    @app.route('/manifest.json')
+    def serve_manifest():
+        return app.send_static_file('manifest.json')
+
+    @app.route('/sw.js')
+    def serve_sw():
+        response = app.send_static_file('sw.js')
+        response.headers['Service-Worker-Allowed'] = '/'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Content-Type'] = 'application/javascript'
+        return response
+
+    @app.route('/offline.html')
+    def serve_offline():
+        return app.send_static_file('offline.html')
 
     @app.route('/approve.html')
     def serve_approve():

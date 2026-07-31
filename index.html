@@ -3,18 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Homeroom</title>
-    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAB0klEQVR4nO1bMU4DMRBcEFWEoOclfCcCQcdj6EAgvpOX0IMiWqgcLJ/PvrV3b+zzThUlsj0znl0nJ4fIYDCMjLOawXcPX79SRGrx/npdpIU9qCXRc+CYcc6ZuAfxRDyei5zqRXgMuTRkE9CzeKI8/6QBvYt3SOlg9QANPN/eQNefrQ/t3Y8Jfzp8ai4Z7QdRA7TEc3Zby4zQhAuVVQKUxNyN0U6FqgES9a1txKQEJOKv2dgkjPDLQCwBa3Vzfx0JM6oNQB5jEuVRbYBbHGFEEwlw8Mm03gN8qJwCGqnQOgVUj8Hd/khERD8fl9Vz0OFbgtIEar8F3l6uTq93++O/kIUIx/jzSUI8ASmivqBYKnImubnvH+XSIJoAzi75O8xNiGQaxAwoJcUtjdr1QogYoFWfa6xb1QNQwmMcSvtCcQJaEO+jlE9xAkLHEYZInAbwZ4JomAFoAmiYAWgCaAxvwCqPxX0sObrWPFKHT4AZgCaAhhmAJoCGGYAmgIYZgCaAhhmAJoDG8Aao3BBpHf4NkUkCSm9d94JQ3/AlYAbE3txqGcR0zSZgaybM6bESSH24lRSkdGQT0LsJOf4scT19SVq6cawe0EsaODyH/9+gwTA4/gBEDKCkJsiH8AAAAABJRU5ErkJggg==">
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=3">
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=3">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png?v=3">
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
+    <title>Homeroom - Student & Classroom Portal</title>
+    <meta name="description" content="Your Class. One Digital Home. Notes, Q&A, chat, tasks, leaderboard and wallet offline.">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#6366f1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Homeroom">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body data-theme="dark">
+    <!-- Offline Status Sticky Banner -->
+    <div id="offline-banner" style="display: none; background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%); color: white; text-align: center; padding: 0.45rem 1rem; font-size: 0.85rem; font-weight: 600; position: sticky; top: 0; z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        📶 You are operating in offline mode. Viewing cached content. Actions will auto-sync when reconnected.
+    </div>
+
+    <!-- PWA SW Update Prompt Toast -->
+    <div id="sw-update-banner" style="display: none; position: fixed; bottom: 80px; right: 20px; z-index: 10000; background: rgba(18, 18, 43, 0.96); border: 1px solid rgba(99, 102, 241, 0.6); border-radius: 0.85rem; padding: 1rem 1.25rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(12px); color: white; gap: 1rem; align-items: center;">
+        <div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: #a5b4fc;">⚡ Homeroom Update Ready</div>
+            <div style="font-size: 0.82rem; color: #9ca3af; margin-top: 2px;">A new version is available with fresh updates.</div>
+        </div>
+        <button id="btn-sw-reload" class="btn btn-premium" style="padding: 0.4rem 0.9rem; font-size: 0.82rem; border-radius: 0.5rem; border: none; font-weight: 700; cursor: pointer; white-space: nowrap;">
+            Update Now
+        </button>
+    </div>
+
     <!-- App Container -->
     <div class="app-layout">
         
@@ -22,7 +44,7 @@
         <aside class="sidebar glass-panel" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo" style="display: flex; align-items: center; gap: 0.6rem;">
-                    <img src="/favicon.svg" width="26" height="26" style="border-radius: 6px;" alt="Homeroom">
+                    <img src="favicon.svg" width="26" height="26" style="border-radius: 6px;" alt="Homeroom">
                     <span>Homeroom</span>
                 </div>
             </div>
@@ -57,6 +79,9 @@
             </nav>
             
             <div class="sidebar-footer">
+                <button id="btn-sidebar-install" class="btn" style="display: none; width: 100%; margin-bottom: 0.75rem; background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.4); padding: 0.5rem; border-radius: 0.5rem; font-size: 0.85rem; font-weight: 600; cursor: pointer; align-items: center; justify-content: center; gap: 0.4rem;">
+                    📲 Install App
+                </button>
                 <div class="user-mini-profile" id="sidebar-user">
                     <!-- Injected by app.js -->
                 </div>
@@ -69,9 +94,13 @@
             <header class="app-header glass-panel">
                 <button class="menu-toggle" id="menu-toggle">☰</button>
                 <div class="header-search">
-                    <input type="text" placeholder="Search..." id="global-search">
+                    <input type="text" placeholder="Search... (Ctrl+K)" id="global-search">
                 </div>
                 <div class="header-actions">
+                    <button id="btn-header-install" class="btn" style="display: none; padding: 0.35rem 0.75rem; border-radius: 2rem; font-size: 0.82rem; font-weight: 700; background: rgba(99, 102, 241, 0.25); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.5); cursor: pointer; align-items: center; gap: 0.3rem;">
+                        📲 <span>Install</span>
+                    </button>
+
                     <div class="quick-action-wrapper" style="position: relative;">
                         <button id="btn-quick-create" class="btn btn-premium" style="padding: 0.35rem 0.75rem; border-radius: 2rem; font-size: 0.82rem; font-weight: 700; display: flex; align-items: center; gap: 0.3rem; cursor: pointer; border: none;">
                             ➕ <span>Create</span>
@@ -131,30 +160,64 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
-    <script src="js/firebase-config.js?v=8"></script>
+    <script src="js/firebase-config.js"></script>
 
     <!-- Scripts -->
-    <script src="js/api.js?v=8"></script>
-    <script src="js/auth.js?v=8"></script>
-    <script src="js/offline_db.js?v=8"></script>
-    <script src="js/store.js?v=8"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/offline_db.js"></script>
+    <script src="js/store.js"></script>
     <script>window.Homeroom = window.Homeroom || {}; window.Homeroom.pages = {};</script>
-    <script src="js/pages/home.js?v=8"></script>
-    <script src="js/pages/notes.js?v=8"></script>
-    <script src="js/pages/chats.js?v=8"></script>
-    <script src="js/pages/qna.js?v=8"></script>
-    <script src="js/pages/community.js?v=8"></script>
-    <script src="js/pages/tasks.js?v=8"></script>
-    <script src="js/pages/leaderboard.js?v=8"></script>
-    <script src="js/pages/marketplace.js?v=8"></script>
-    <script src="js/pages/wallet.js?v=8"></script>
-    <script src="js/pages/profile.js?v=8"></script>
-    <script src="js/pages/settings.js?v=8"></script>
-    <script src="js/app.js?v=8"></script>
+    <script src="js/pages/home.js"></script>
+    <script src="js/pages/notes.js"></script>
+    <script src="js/pages/chats.js"></script>
+    <script src="js/pages/qna.js"></script>
+    <script src="js/pages/community.js"></script>
+    <script src="js/pages/tasks.js"></script>
+    <script src="js/pages/leaderboard.js"></script>
+    <script src="js/pages/marketplace.js"></script>
+    <script src="js/pages/wallet.js"></script>
+    <script src="js/pages/profile.js"></script>
+    <script src="js/pages/settings.js"></script>
+    <script src="js/app.js"></script>
     <script>
+        // Service Worker Registration with Update Controller
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js');
+            window.addEventListener('load', async () => {
+                try {
+                    const reg = await navigator.serviceWorker.register('sw.js');
+                    
+                    reg.addEventListener('updatefound', () => {
+                        const newWorker = reg.installing;
+                        if (!newWorker) return;
+                        
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                const banner = document.getElementById('sw-update-banner');
+                                if (banner) banner.style.display = 'flex';
+                            }
+                        });
+                    });
+                } catch(err) {
+                    console.warn('Service Worker registration failed:', err);
+                }
+            });
+
+            document.getElementById('btn-sw-reload')?.addEventListener('click', () => {
+                navigator.serviceWorker.ready.then(reg => {
+                    if (reg.waiting) {
+                        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                    window.location.reload();
+                });
+            });
+
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    window.location.reload();
+                }
             });
         }
     </script>

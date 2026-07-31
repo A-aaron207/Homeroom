@@ -31,29 +31,53 @@ Homeroom.API = {
     try {
       // Helper for friendly Firebase Auth error messages
       const getFriendlyAuthError = (err) => {
-        if (!err || !err.code) return (err && err.message) ? err.message.replace(/^Firebase:\s*/, '') : 'Authentication failed';
-        switch (err.code) {
-          case 'auth/invalid-email':
-            return 'Please enter a valid email address.';
-          case 'auth/email-already-in-use':
-            return 'An account with this email address already exists.';
-          case 'auth/weak-password':
-            return 'Password must be at least 6 characters long.';
-          case 'auth/user-not-found':
-          case 'auth/wrong-password':
-          case 'auth/invalid-credential':
-            return 'Invalid email/username or password.';
-          case 'auth/too-many-requests':
-            return 'Too many failed login attempts. Please try again later.';
-          default:
-            return err.message ? err.message.replace(/^Firebase:\s*/, '') : 'Authentication failed';
+        if (!err) return 'Authentication failed';
+        const code = err.code || '';
+        const msg = err.message || '';
+
+        if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain') || msg.includes('unauthorized domain')) {
+          const currentHost = window.location.hostname || 'your domain';
+          return `Domain "${currentHost}" is not authorized in Firebase Console. Please add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized Domains.`;
+        }
+        if (code === 'auth/invalid-email') {
+          return 'Please enter a valid email address.';
+        }
+        if (code === 'auth/email-already-in-use') {
+          return 'An account with this email address already exists.';
+        }
+        if (code === 'auth/weak-password') {
+          return 'Password must be at least 6 characters long.';
+        }
+        if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+          return 'Invalid email/username or password.';
+        }
+        if (code === 'auth/too-many-requests') {
+          return 'Too many failed login attempts. Please try again later.';
+        }
+        if (code === 'auth/network-request-failed' || msg.includes('network-request-failed')) {
+          return 'Network error connecting to Firebase. Check internet connection and ensure your domain is authorized in Firebase Console.';
+        }
+        return msg ? msg.replace(/^Firebase:\s*/, '') : 'Authentication failed';
+      };
+
+      // Safe Firestore get with cache fallback
+      const safeGet = async (ref) => {
+        try {
+          return await ref.get();
+        } catch (e) {
+          try {
+            return await ref.get({ source: 'cache' });
+          } catch (e2) {
+            throw e;
+          }
         }
       };
 
       // 1. Auth Signup
       if (path === '/auth/signup' && method === 'POST') {
-        const email = (body.email || body.username || '').trim();
+        const inputEmail = (body.email || body.username || '').trim();
         const username = (body.username || '').trim().replace(/^@/, '');
+        const email = inputEmail.includes('@') ? inputEmail : `${username}@homeroom.app`;
         const displayName = (body.displayName || username).trim();
 
         let userCred;
@@ -87,7 +111,11 @@ Homeroom.API = {
         };
 
         if (db) {
-          await db.collection('users').doc(uid).set(userData);
+          try {
+            await db.collection('users').doc(uid).set(userData);
+          } catch (dbErr) {
+            console.warn('Could not write user profile to Firestore:', dbErr);
+          }
         }
 
         this.setToken(uid);
@@ -103,9 +131,20 @@ Homeroom.API = {
         // If user entered a username instead of an email, look up their email in Firestore
         if (!input.includes('@')) {
           const handle = input.replace(/^@/, '');
-          const snap = await db.collection('users').where('username', '==', handle).get();
-          if (!snap.empty) {
-            loginEmail = snap.docs[0].data().email || `${handle}@homeroom.app`;
+          try {
+            if (db) {
+              const snap = await safeGet(db.collection('users').where('username', '==', handle));
+              if (snap && !snap.empty) {
+                loginEmail = snap.docs[0].data().email || `${handle}@homeroom.app`;
+              } else {
+                loginEmail = `${handle}@homeroom.app`;
+              }
+            } else {
+              loginEmail = `${handle}@homeroom.app`;
+            }
+          } catch (lookupErr) {
+            console.warn('Username lookup in Firestore skipped/failed:', lookupErr);
+            loginEmail = `${handle}@homeroom.app`;
           }
         }
 
@@ -120,8 +159,17 @@ Homeroom.API = {
         this.setToken(uid);
         localStorage.setItem('homeroom_uid', uid);
 
-        const userSnap = await db.collection('users').doc(uid).get();
-        const userData = userSnap.exists ? userSnap.data() : { id: uid, email: loginEmail, username: input };
+        let userData = { id: uid, email: loginEmail, username: input };
+        try {
+          if (db) {
+            const userSnap = await safeGet(db.collection('users').doc(uid));
+            if (userSnap && userSnap.exists) {
+              userData = userSnap.data();
+            }
+          }
+        } catch (e) {
+          console.warn('User profile fetch after login failed:', e);
+        }
 
         return { success: true, message: 'Login successful', data: { token: uid, user: userData } };
       }
@@ -129,7 +177,7 @@ Homeroom.API = {
       // 3. Auth Me
       if (path === '/auth/me' && method === 'GET') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
-        const userSnap = await db.collection('users').doc(currentUid).get();
+        const userSnap = await safeGet(db.collection('users').doc(currentUid));
         if (!userSnap.exists) return { success: false, message: 'User not found' };
         const userData = userSnap.data();
         return { success: true, data: { user: userData } };
@@ -138,7 +186,7 @@ Homeroom.API = {
       // 4. Users Profile
       if (path === '/users/me' && method === 'GET') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
-        const snap = await db.collection('users').doc(currentUid).get();
+        const snap = await safeGet(db.collection('users').doc(currentUid));
         const u = snap.data();
         return { success: true, data: { ...u, user: u } };
       }
@@ -146,7 +194,7 @@ Homeroom.API = {
       if (path.startsWith('/users/') && method === 'GET') {
         const uid = path.split('/')[2];
         const targetUid = (uid === 'me') ? currentUid : uid;
-        const snap = await db.collection('users').doc(targetUid).get();
+        const snap = await safeGet(db.collection('users').doc(targetUid));
         if (!snap.exists) return { success: false, message: 'User not found' };
         const u = snap.data();
         return { success: true, data: { ...u, user: u } };
@@ -158,7 +206,7 @@ Homeroom.API = {
           ...body,
           updated_at: new Date().toISOString()
         });
-        const snap = await db.collection('users').doc(currentUid).get();
+        const snap = await safeGet(db.collection('users').doc(currentUid));
         const u = snap.data();
         return { success: true, message: 'Profile updated', data: { ...u, user: u } };
       }
@@ -166,9 +214,8 @@ Homeroom.API = {
       // 5. Conversations
       if (path === '/conversations' && method === 'GET') {
         if (!currentUid) return { success: true, data: [] };
-        const snap = await db.collection('conversations')
-          .where('participant_ids', 'array-contains', currentUid)
-          .get();
+        const snap = await safeGet(db.collection('conversations')
+          .where('participant_ids', 'array-contains', currentUid));
         const convs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         return { success: true, data: convs };
       }
@@ -333,7 +380,16 @@ Homeroom.API = {
       // Fallback empty response
       return { success: true, data: [] };
     } catch (err) {
-      console.error('Firebase Firestore error:', err);
+      console.warn('Firebase error:', err);
+      if (err && err.code && err.code.startsWith('auth/')) {
+        return { success: false, message: getFriendlyAuthError(err) };
+      }
+      if (path && path.startsWith('/auth')) {
+        return { success: false, message: getFriendlyAuthError(err) };
+      }
+      if (err && err.message && (err.message.includes('offline') || err.message.includes('unavailable') || err.message.includes('network') || err.message.includes('Failed to get'))) {
+        return null;
+      }
       return { success: false, message: err.message || 'Database error' };
     }
   },
@@ -341,7 +397,13 @@ Homeroom.API = {
   async request(method, path, body, isFormData = false) {
     // If Firebase initialized, use Firestore Cloud Database directly
     if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
-      return await this.firebaseHandler(method, path, body);
+      const fbResult = await this.firebaseHandler(method, path, body);
+      if (fbResult !== null && fbResult !== undefined) {
+        if (fbResult.success && path === '/auth/me' && fbResult.data && fbResult.data.user) {
+          try { localStorage.setItem('homeroom_cached_user', JSON.stringify(fbResult.data.user)); } catch(e) {}
+        }
+        return fbResult;
+      }
     }
     
     // HTTP Fallback
@@ -356,8 +418,21 @@ Homeroom.API = {
         headers,
         body: body ? (isFormData ? body : JSON.stringify(body)) : null
       });
-      return await res.json();
+      const data = await res.json();
+      if (data && data.success && path === '/auth/me' && data.data && data.data.user) {
+        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(data.data.user)); } catch(e) {}
+      }
+      return data;
     } catch(e) {
+      // Offline fallback for cached user profile
+      if (path === '/auth/me' && curToken) {
+        const cachedUser = localStorage.getItem('homeroom_cached_user');
+        if (cachedUser) {
+          try {
+            return { success: true, data: { user: JSON.parse(cachedUser) } };
+          } catch(err) {}
+        }
+      }
       return { success: false, message: 'Network error' };
     }
   },

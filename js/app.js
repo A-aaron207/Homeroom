@@ -1,6 +1,8 @@
 window.Homeroom = window.Homeroom || {};
 
 const App = {
+    deferredInstallPrompt: null,
+
     async init() {
         await Homeroom.auth.init();
         
@@ -11,6 +13,9 @@ const App = {
         Homeroom.store.currentUser = Homeroom.auth.user;
         
         this.bindEvents();
+        this.initPWAFeatures();
+        this.bindKeyboardShortcuts();
+        this.handleShareAndFileTargets();
         this.updateHeaderAndSidebar();
         
         Homeroom.store.on('wallet_updated', () => this.updateCoins());
@@ -26,12 +31,206 @@ const App = {
         setInterval(() => this.loadNotifications(), 6000);
     },
     
+    initPWAFeatures() {
+        // 1. Installability Listener (beforeinstallprompt)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            this.deferredInstallPrompt = e;
+
+            const headerBtn = document.getElementById('btn-header-install');
+            const sidebarBtn = document.getElementById('btn-sidebar-install');
+            if (headerBtn) headerBtn.style.display = 'flex';
+            if (sidebarBtn) sidebarBtn.style.display = 'flex';
+        });
+
+        const promptInstall = async () => {
+            if (!this.deferredInstallPrompt) {
+                // Check if iOS
+                if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                    Homeroom.modal.open('📲 Install Homeroom on iOS', `
+                        <div style="text-align: center; padding: 1rem;">
+                            <div style="font-size: 3rem; margin-bottom: 0.5rem;">📲</div>
+                            <p style="font-size: 0.95rem; color: var(--text-color); margin-bottom: 1rem;">To install Homeroom on your iPhone or iPad:</p>
+                            <ol style="text-align: left; background: rgba(0,0,0,0.2); padding: 1rem 1rem 1rem 2rem; border-radius: 0.75rem; color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;">
+                                <li>Tap the <strong>Share</strong> icon in Safari (bottom toolbar)</li>
+                                <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+                                <li>Tap <strong>Add</strong> in the top right corner</li>
+                            </ol>
+                        </div>
+                    `);
+                } else {
+                    Homeroom.toast('App installation is already active or unsupported in this browser.', 'info');
+                }
+                return;
+            }
+
+            this.deferredInstallPrompt.prompt();
+            const choice = await this.deferredInstallPrompt.userChoice;
+            if (choice.outcome === 'accepted') {
+                Homeroom.toast('🎉 Thanks for installing Homeroom!', 'success');
+            }
+            this.deferredInstallPrompt = null;
+            document.getElementById('btn-header-install')?.style.setProperty('display', 'none');
+            document.getElementById('btn-sidebar-install')?.style.setProperty('display', 'none');
+        };
+
+        document.getElementById('btn-header-install')?.addEventListener('click', promptInstall);
+        document.getElementById('btn-sidebar-install')?.addEventListener('click', promptInstall);
+
+        window.addEventListener('appinstalled', () => {
+            Homeroom.toast('✨ Homeroom installed successfully!', 'success');
+            this.deferredInstallPrompt = null;
+        });
+
+        // 2. Offline / Online Status Sync
+        const updateOnlineStatus = () => {
+            const banner = document.getElementById('offline-banner');
+            if (banner) {
+                banner.style.display = navigator.onLine ? 'none' : 'block';
+            }
+            if (navigator.onLine) {
+                Homeroom.OfflineDB.processQueue(async (actionType, payload) => {
+                    if (actionType === 'send_message') {
+                        await Homeroom.API.post(`/conversations/${payload.chatId}/messages`, { content: payload.content });
+                    } else if (actionType === 'create_question') {
+                        await Homeroom.API.post('/qna/questions', payload);
+                    } else if (actionType === 'upload_note') {
+                        await Homeroom.API.post('/notes', payload);
+                    }
+                });
+            }
+        };
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus();
+
+        // 3. Clipboard Support (Paste handler for images/files)
+        window.addEventListener('paste', (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
+                    if (blob) {
+                        Homeroom.toast('📋 Image detected from clipboard! Opening Note Upload...', 'info');
+                        location.hash = '#notes';
+                        setTimeout(() => {
+                            if (Homeroom.pages.notes && Homeroom.pages.notes.openUploadModalWithFile) {
+                                Homeroom.pages.notes.openUploadModalWithFile(blob);
+                            }
+                        }, 400);
+                    }
+                }
+            }
+        });
+    },
+
+    bindKeyboardShortcuts() {
+        window.addEventListener('keydown', (e) => {
+            // Ctrl+K or Cmd+K -> Focus Search
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                const searchInput = document.getElementById('global-search');
+                if (searchInput) searchInput.focus();
+            }
+
+            // Ctrl+N or Cmd+N -> Quick Create Menu
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+                e.preventDefault();
+                const quickMenu = document.getElementById('quick-action-menu');
+                if (quickMenu) {
+                    quickMenu.style.display = quickMenu.style.display === 'flex' ? 'none' : 'flex';
+                }
+            }
+
+            // Ctrl+/ or Cmd+/ -> Keyboard Shortcuts Help
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
+                this.showKeyboardShortcutsModal();
+            }
+
+            // Escape -> Close modals
+            if (e.key === 'Escape') {
+                Homeroom.modal.close();
+                const quickMenu = document.getElementById('quick-action-menu');
+                if (quickMenu) quickMenu.style.display = 'none';
+            }
+        });
+    },
+
+    showKeyboardShortcutsModal() {
+        Homeroom.modal.open('⌨️ Keyboard Shortcuts', `
+            <div style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                    <span>Global Search</span>
+                    <kbd style="background: rgba(99,102,241,0.25); border: 1px solid rgba(99,102,241,0.4); padding: 0.2rem 0.6rem; border-radius: 0.3rem; font-family: monospace;">Ctrl + K</kbd>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                    <span>Quick Create Menu</span>
+                    <kbd style="background: rgba(99,102,241,0.25); border: 1px solid rgba(99,102,241,0.4); padding: 0.2rem 0.6rem; border-radius: 0.3rem; font-family: monospace;">Ctrl + N</kbd>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                    <span>Keyboard Shortcuts Help</span>
+                    <kbd style="background: rgba(99,102,241,0.25); border: 1px solid rgba(99,102,241,0.4); padding: 0.2rem 0.6rem; border-radius: 0.3rem; font-family: monospace;">Ctrl + /</kbd>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.6rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem;">
+                    <span>Close Active Modal</span>
+                    <kbd style="background: rgba(99,102,241,0.25); border: 1px solid rgba(99,102,241,0.4); padding: 0.2rem 0.6rem; border-radius: 0.3rem; font-family: monospace;">Esc</kbd>
+                </div>
+            </div>
+        `);
+    },
+
+    handleShareAndFileTargets() {
+        // Handle Web Share Target API params in URL
+        const hash = window.location.hash;
+        if (hash.includes('share-target')) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const title = urlParams.get('title') || '';
+            const text = urlParams.get('text') || '';
+            const sharedUrl = urlParams.get('url') || '';
+
+            location.hash = '#notes';
+            setTimeout(() => {
+                Homeroom.toast(`Received shared content: "${title || text}"`, 'info');
+            }, 500);
+        }
+
+        // Handle File Handling API (Launch Queue)
+        if ('launchQueue' in window && 'files' in LaunchParams.prototype) {
+            window.launchQueue.setConsumer(async (launchParams) => {
+                if (!launchParams.files.length) return;
+                const fileHandle = launchParams.files[0];
+                const file = await fileHandle.getFile();
+                Homeroom.toast(`📂 Opened file: ${file.name}`, 'info');
+                location.hash = '#notes';
+                setTimeout(() => {
+                    if (Homeroom.pages.notes && Homeroom.pages.notes.openUploadModalWithFile) {
+                        Homeroom.pages.notes.openUploadModalWithFile(file);
+                    }
+                }, 400);
+            });
+        }
+    },
+    
     async loadNotifications() {
         try {
             const res = await Homeroom.API.get('/notifications');
             if (res.success && res.data) {
                 const badge = document.getElementById('notif-badge');
                 const unread = res.data.unread_count || 0;
+
+                // Update App Badging API on Supported Operating Systems
+                if ('setAppBadge' in navigator) {
+                    if (unread > 0) {
+                        navigator.setAppBadge(unread).catch(() => {});
+                    } else {
+                        navigator.clearAppBadge().catch(() => {});
+                    }
+                }
+
                 if (badge) {
                     if (unread > 0) {
                         badge.textContent = unread > 99 ? '99+' : unread;
@@ -73,12 +272,13 @@ const App = {
             document.getElementById('btn-mark-all-notifs')?.addEventListener('click', async () => {
                 await Homeroom.API.post('/notifications/read-all');
                 Homeroom.toast('All notifications marked as read', 'success');
+                if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
                 this.loadNotifications();
                 Homeroom.modal.close();
             });
 
-            // Mark as read in backend
             await Homeroom.API.post('/notifications/read-all');
+            if ('clearAppBadge' in navigator) navigator.clearAppBadge().catch(() => {});
             this.loadNotifications();
         } catch(e) {
             Homeroom.toast('Failed to load notifications', 'error');
@@ -113,21 +313,21 @@ const App = {
             return;
         }
 
-        const notesHTML = notes.map(n => `
+        const notesHTML = (notes || []).map(n => `
             <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;" onclick="Homeroom.modal.close(); location.hash='#notes'; setTimeout(()=>Homeroom.pages.notes.openNote('${n.id}'), 300)">
                 <div style="font-weight: bold; color: var(--accent-color);">📄 ${n.title}</div>
                 <div style="font-size: 0.8rem; color: var(--text-muted);">${n.subject} • By ${n.author_name}</div>
             </div>
         `).join('');
 
-        const questionsHTML = questions.map(q => `
+        const questionsHTML = (questions || []).map(q => `
             <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;" onclick="Homeroom.modal.close(); location.hash='#qna'; setTimeout(()=>Homeroom.pages.qna.openQuestion('${q.id}'), 300)">
                 <div style="font-weight: bold; color: #8b5cf6;">❓ ${q.title}</div>
                 <div style="font-size: 0.8rem; color: var(--text-muted);">${q.subject} • ${q.answer_count} Answers</div>
             </div>
         `).join('');
 
-        const usersHTML = users.map(u => `
+        const usersHTML = (users || []).map(u => `
             <div style="padding: 0.75rem; background: rgba(0,0,0,0.2); border-radius: 0.5rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem;">
                 <div style="font-size: 1.5rem;">${u.avatar_emoji || '🎓'}</div>
                 <div>
@@ -139,9 +339,9 @@ const App = {
 
         Homeroom.modal.open(`Search Results for "${query}"`, `
             <div style="max-height: 450px; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;">
-                ${notes.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Notes (${notes.length})</h4>${notesHTML}</div>` : ''}
-                ${questions.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Q&A Questions (${questions.length})</h4>${questionsHTML}</div>` : ''}
-                ${users.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Classmates (${users.length})</h4>${usersHTML}</div>` : ''}
+                ${notes && notes.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Notes (${notes.length})</h4>${notesHTML}</div>` : ''}
+                ${questions && questions.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Q&A Questions (${questions.length})</h4>${questionsHTML}</div>` : ''}
+                ${users && users.length ? `<div><h4 style="margin: 0 0 0.5rem 0;">Classmates (${users.length})</h4>${usersHTML}</div>` : ''}
             </div>
         `);
     },
@@ -159,7 +359,7 @@ const App = {
     
     handleDailyStatus(status) {
         if (status && status.canSpin) {
-            Homeroom.toast('You have a daily spin available!', 'info');
+            Homeroom.toast('🎁 You have a daily reward spin ready!', 'info');
         }
     },
     
@@ -218,7 +418,6 @@ const App = {
             });
         }
 
-        // Header Quick Create Dropdown
         const btnQuick = document.getElementById('btn-quick-create');
         const quickMenu = document.getElementById('quick-action-menu');
         if (btnQuick && quickMenu) {
@@ -233,7 +432,6 @@ const App = {
             });
         }
 
-        // Mobile Pull-to-refresh
         let touchStart = 0;
         const main = document.getElementById('main-content');
         if (main) {
