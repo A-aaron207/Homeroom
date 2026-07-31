@@ -578,6 +578,153 @@ Homeroom.API = {
         return { success: true, data: { reward } };
       }
 
+      // 11. Users Listing
+      if (path === '/users' && method === 'GET') {
+        let snap;
+        try {
+          snap = await db.collection('users').limit(100).get();
+        } catch(e) {
+          snap = { docs: [] };
+        }
+        const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return { success: true, data: users };
+      }
+
+      // 12. Wallet & Transfer
+      if (path === '/wallet' && method === 'GET') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+        const uSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
+        const uData = uSnap && uSnap.exists ? uSnap.data() : {};
+        const balance = uData.coins || 100;
+        const totalEarned = uData.coins_earned || balance;
+        const totalSpent = uData.coins_spent || 0;
+        
+        let txSnap;
+        try {
+          txSnap = await db.collection('users').doc(currentUid).collection('transactions').orderBy('created_at', 'desc').limit(20).get();
+        } catch(e) {
+          try {
+            txSnap = await db.collection('users').doc(currentUid).collection('transactions').get();
+          } catch(e2) {
+            txSnap = { docs: [] };
+          }
+        }
+        const transactions = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (transactions.length === 0) {
+          transactions.push({ id: 'tx_init', type: 'earned', amount: 100, reason: 'Welcome Bonus 🎁', created_at: uData.created_at || new Date().toISOString() });
+        }
+        return { success: true, data: { balance, totalEarned, totalSpent, rank: 1, transactions } };
+      }
+
+      if (path === '/wallet/transfer' && method === 'POST') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+        const recipientId = payload.recipientId;
+        const amount = parseInt(payload.amount) || 0;
+        if (!recipientId || amount <= 0) return { success: false, message: 'Invalid recipient or amount' };
+
+        const senderRef = db.collection('users').doc(currentUid);
+        const recipientRef = db.collection('users').doc(recipientId);
+
+        const senderSnap = await senderRef.get();
+        const senderData = senderSnap.data() || {};
+        if ((senderData.coins || 0) < amount) {
+          return { success: false, message: 'Insufficient ClassCoins balance' };
+        }
+
+        await senderRef.update({
+          coins: firebase.firestore.FieldValue.increment(-amount),
+          coins_spent: firebase.firestore.FieldValue.increment(amount)
+        });
+
+        await recipientRef.update({
+          coins: firebase.firestore.FieldValue.increment(amount),
+          coins_earned: firebase.firestore.FieldValue.increment(amount)
+        }).catch(() => {});
+
+        const txReason = payload.reason || 'Coins Transfer';
+        await senderRef.collection('transactions').doc().set({
+          type: 'spent',
+          amount: amount,
+          reason: `Sent to user: ${txReason}`,
+          created_at: new Date().toISOString()
+        });
+
+        await recipientRef.collection('transactions').doc().set({
+          type: 'earned',
+          amount: amount,
+          reason: `Received transfer: ${txReason}`,
+          created_at: new Date().toISOString()
+        }).catch(() => {});
+
+        return { success: true, message: 'Transfer successful!' };
+      }
+
+      // 13. Marketplace
+      if (path === '/marketplace' && method === 'GET') {
+        const catalog = [
+          { id: 'theme_neon', name: 'Cyber Neon Theme', type: 'theme', price: 150, icon: '🎨', description: 'Futuristic glowing neon aesthetic for your interface.' },
+          { id: 'theme_sunset', name: 'Golden Sunset Theme', type: 'theme', price: 150, icon: '🌅', description: 'Warm amber gradients for cozy study sessions.' },
+          { id: 'avatar_crown', name: 'Scholar Crown Avatar', type: 'avatar', price: 200, icon: '👑', description: 'Exclusive crown avatar badge.' },
+          { id: 'avatar_dragon', name: 'Dragon Companion', type: 'avatar', price: 300, icon: '🐉', description: 'Legendary dragon avatar icon.' },
+          { id: 'title_master', name: 'Class Master Title', type: 'title', price: 250, icon: '🏅', description: 'Show off your dedication with the Class Master title.' }
+        ];
+        return { success: true, data: catalog };
+      }
+
+      if (path.includes('/marketplace/purchase/') && method === 'POST') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+        const itemId = path.split('/')[3];
+        const userRef = db.collection('users').doc(currentUid);
+        const userSnap = await userRef.get();
+        const userData = userSnap.data() || {};
+        
+        const catalog = { 'theme_neon': 150, 'theme_sunset': 150, 'avatar_crown': 200, 'avatar_dragon': 300, 'title_master': 250 };
+        const price = catalog[itemId] || 100;
+
+        if ((userData.coins || 0) < price) {
+          return { success: false, message: 'Insufficient ClassCoins for this item' };
+        }
+
+        const items = Array.isArray(userData.purchased_items) ? userData.purchased_items : [];
+        if (!items.includes(itemId)) items.push(itemId);
+
+        await userRef.update({
+          coins: firebase.firestore.FieldValue.increment(-price),
+          coins_spent: firebase.firestore.FieldValue.increment(price),
+          purchased_items: items
+        });
+
+        return { success: true, message: 'Item purchased successfully!' };
+      }
+
+      // 14. Daily Status, Announcements, Notifications & Search
+      if (path === '/daily/status' && method === 'GET') {
+        const uSnap = currentUid ? await safeGet(db.collection('users').doc(currentUid)).catch(() => null) : null;
+        const uData = uSnap && uSnap.exists ? uSnap.data() : {};
+        return { success: true, data: { checked_in_today: false, can_spin: true, streak: uData.streak_current || 1 } };
+      }
+
+      if (path.startsWith('/announcements') && method === 'GET') {
+        return {
+          success: true,
+          data: [
+            { id: '1', title: '🎉 Welcome to Homeroom!', content: 'Your digital class portal is live with Q&A, Notes, Tasks, and Market Rewards.', created_at: new Date().toISOString() }
+          ]
+        };
+      }
+
+      if (path.startsWith('/notifications') && method === 'GET') {
+        return { success: true, data: [] };
+      }
+
+      if (path.startsWith('/notifications/read-all') && method === 'POST') {
+        return { success: true, message: 'Notifications marked as read' };
+      }
+
+      if (path.startsWith('/search') && method === 'GET') {
+        return { success: true, data: { notes: [], questions: [], users: [] } };
+      }
+
       // Fallback empty response
       return { success: true, data: [] };
     } catch (err) {

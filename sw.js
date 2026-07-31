@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homeroom-v3.0.0';
+const CACHE_NAME = 'homeroom-v4.0.0';
 const OFFLINE_URL = './offline.html';
 
 const STATIC_ASSETS = [
