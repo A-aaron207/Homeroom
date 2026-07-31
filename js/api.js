@@ -26,6 +26,7 @@ Homeroom.API = {
     const db = Homeroom.firebase ? Homeroom.firebase.db : null;
     const auth = Homeroom.firebase ? Homeroom.firebase.auth : null;
     const currentUser = auth ? auth.currentUser : null;
+    const currentUid = currentUser ? currentUser.uid : (localStorage.getItem('homeroom_uid') || localStorage.getItem('homeroom_token'));
     let payload = {};
     if (body) {
       if (typeof FormData !== 'undefined' && body instanceof FormData) {
