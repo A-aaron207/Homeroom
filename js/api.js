@@ -26,7 +26,20 @@ Homeroom.API = {
     const db = Homeroom.firebase ? Homeroom.firebase.db : null;
     const auth = Homeroom.firebase ? Homeroom.firebase.auth : null;
     const currentUser = auth ? auth.currentUser : null;
-    const currentUid = currentUser ? currentUser.uid : localStorage.getItem('homeroom_uid');
+    let payload = {};
+    if (body) {
+      if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        for (const [key, val] of body.entries()) {
+          if (key === 'tags') {
+            try { payload[key] = JSON.parse(val); } catch(e) { payload[key] = val ? String(val).split(',').map(s=>s.trim()) : []; }
+          } else {
+            payload[key] = val;
+          }
+        }
+      } else if (typeof body === 'object') {
+        payload = { ...body };
+      }
+    }
 
     try {
       // Helper for friendly Firebase Auth error messages
@@ -336,52 +349,150 @@ Homeroom.API = {
 
       // 6. Notes
       if (path.startsWith('/notes') && method === 'GET') {
-        const snap = await db.collection('notes').orderBy('created_at', 'desc').limit(50).get();
+        let snap;
+        try {
+          snap = await db.collection('notes').orderBy('created_at', 'desc').limit(50).get();
+        } catch (e) {
+          snap = await db.collection('notes').get();
+        }
         const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return { success: true, data: notes };
       }
 
       if (path === '/notes' && method === 'POST') {
         const docRef = db.collection('notes').doc();
+        let fileUrl = payload.file_url || '';
+        
+        if (payload.file instanceof File && payload.file.name && Homeroom.firebase && Homeroom.firebase.storage) {
+          try {
+            const storageRef = Homeroom.firebase.storage.ref().child(`notes/${Date.now()}_${payload.file.name}`);
+            await storageRef.put(payload.file);
+            fileUrl = await storageRef.getDownloadURL();
+          } catch (e) {
+            console.warn('Firebase storage note upload warning:', e);
+            fileUrl = payload.file.name || '';
+          }
+        }
+
+        const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
+        const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+
         const noteData = {
           id: docRef.id,
-          title: body.title || 'Untitled Note',
-          subject: body.subject || 'General',
-          content: body.content || '',
-          file_url: body.file_url || '',
+          title: payload.title || 'Untitled Note',
+          subject: payload.subject || 'General',
+          description: payload.description || '',
+          content: payload.content || payload.description || '',
+          file_url: fileUrl,
+          file_name: payload.file instanceof File ? payload.file.name : (payload.file_name || 'Note Document'),
+          tags: Array.isArray(payload.tags) ? payload.tags : [],
           author_id: currentUid,
+          author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
+          rating: 5.0,
+          downloads_count: 0,
           created_at: new Date().toISOString()
         };
+
         await docRef.set(noteData);
-        return { success: true, data: noteData };
+        return { success: true, message: 'Note uploaded successfully!', data: noteData };
       }
 
-      // 7. Q&A
-      if (path.startsWith('/qna') && method === 'GET') {
-        const snap = await db.collection('questions').orderBy('created_at', 'desc').limit(50).get();
+      // 7. Q&A / Questions
+      if ((path.startsWith('/questions') || path.startsWith('/qna')) && method === 'GET') {
+        const cleanPath = path.split('?')[0];
+        const parts = cleanPath.split('/').filter(Boolean);
+
+        // Fetch single question with answers: GET /questions/:id
+        if (parts.length === 2 && parts[1] !== 'questions' && parts[1] !== 'qna') {
+          const qId = parts[1];
+          const qSnap = await safeGet(db.collection('questions').doc(qId));
+          if (!qSnap || !qSnap.exists) return { success: false, message: 'Question not found' };
+          
+          let answers = [];
+          try {
+            const ansSnap = await db.collection('questions').doc(qId).collection('answers').orderBy('created_at', 'asc').get();
+            answers = ansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          } catch(e) {
+            try {
+              const ansSnap = await db.collection('questions').doc(qId).collection('answers').get();
+              answers = ansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            } catch(e2) {}
+          }
+          return { success: true, data: { ...qSnap.data(), answers } };
+        }
+
+        let snap;
+        try {
+          snap = await db.collection('questions').orderBy('created_at', 'desc').limit(50).get();
+        } catch(e) {
+          snap = await db.collection('questions').get();
+        }
         const questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return { success: true, data: questions };
       }
 
-      if (path === '/qna' && method === 'POST') {
+      if ((path.startsWith('/questions') || path.startsWith('/qna')) && method === 'POST') {
+        const cleanPath = path.split('?')[0];
+        const parts = cleanPath.split('/').filter(Boolean);
+
+        // Post answer: POST /questions/:id/answers
+        if (parts.length === 3 && parts[2] === 'answers') {
+          const qId = parts[1];
+          const ansRef = db.collection('questions').doc(qId).collection('answers').doc();
+          const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
+          const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+
+          const ansData = {
+            id: ansRef.id,
+            question_id: qId,
+            content: payload.content || '',
+            author_id: currentUid,
+            author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
+            created_at: new Date().toISOString()
+          };
+          await ansRef.set(ansData);
+
+          try {
+            await db.collection('questions').doc(qId).update({
+              answer_count: firebase.firestore.FieldValue.increment(1)
+            });
+          } catch(e) {}
+
+          return { success: true, message: 'Answer posted!', data: ansData };
+        }
+
+        // Post new Question
         const docRef = db.collection('questions').doc();
+        const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
+        const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+
         const qData = {
           id: docRef.id,
-          title: body.title || '',
-          subject: body.subject || 'General',
-          content: body.content || '',
+          title: payload.title || 'Untitled Question',
+          subject: payload.subject || 'General',
+          content: payload.content || '',
+          tags: Array.isArray(payload.tags) ? payload.tags : [],
           author_id: currentUid,
+          author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
+          asked_by_name: authorObj.display_name || authorObj.username || 'User',
           answer_count: 0,
+          best_answer_count: 0,
+          upvotes: 0,
           created_at: new Date().toISOString()
         };
+
         await docRef.set(qData);
-        return { success: true, data: qData };
+        return { success: true, message: 'Question posted successfully!', data: qData };
       }
 
       // 8. Tasks
       if (path.startsWith('/tasks') && method === 'GET') {
-        if (!currentUid) return { success: true, data: [] };
-        const snap = await db.collection('tasks').where('user_id', '==', currentUid).get();
+        let snap;
+        try {
+          snap = await db.collection('tasks').get();
+        } catch(e) {
+          snap = { docs: [] };
+        }
         const tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         return { success: true, data: tasks };
       }
@@ -390,7 +501,10 @@ Homeroom.API = {
         const docRef = db.collection('tasks').doc();
         const taskData = {
           id: docRef.id,
-          title: body.title || '',
+          title: payload.title || '',
+          description: payload.description || '',
+          reward_coins: parseInt(payload.rewardCoins || payload.reward_coins) || 10,
+          reward_xp: parseInt(payload.rewardXp || payload.reward_xp) || 20,
           completed: false,
           user_id: currentUid,
           created_at: new Date().toISOString()
@@ -399,9 +513,26 @@ Homeroom.API = {
         return { success: true, data: taskData };
       }
 
+      if (path.includes('/tasks/') && path.endsWith('/submit') && method === 'POST') {
+        const taskId = path.split('/')[2];
+        await db.collection('tasks').doc(taskId).collection('submissions').doc(currentUid).set({
+          task_id: taskId,
+          user_id: currentUid,
+          proof: payload.proof || '',
+          status: 'pending',
+          submitted_at: new Date().toISOString()
+        });
+        return { success: true, message: 'Proof submitted successfully!' };
+      }
+
       // 9. Leaderboard
       if (path.startsWith('/leaderboard') && method === 'GET') {
-        const snap = await db.collection('users').orderBy('xp', 'desc').limit(25).get();
+        let snap;
+        try {
+          snap = await db.collection('users').orderBy('xp', 'desc').limit(25).get();
+        } catch (e) {
+          snap = await db.collection('users').limit(25).get();
+        }
         const users = snap.docs.map(d => d.data());
         return { success: true, data: users };
       }
