@@ -110,16 +110,17 @@ Homeroom.API = {
           created_at: new Date().toISOString()
         };
 
-        if (db) {
-          try {
+        try {
+          if (db) {
             await db.collection('users').doc(uid).set(userData);
-          } catch (dbErr) {
-            console.warn('Could not write user profile to Firestore:', dbErr);
           }
+        } catch (dbErr) {
+          console.warn('Could not write user profile to Firestore:', dbErr);
         }
 
         this.setToken(uid);
         localStorage.setItem('homeroom_uid', uid);
+        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(userData)); } catch(e) {}
         return { success: true, message: '🎉 Welcome to Homeroom! Your account has been created successfully.', data: { token: uid, user: userData } };
       }
 
@@ -159,36 +160,105 @@ Homeroom.API = {
         this.setToken(uid);
         localStorage.setItem('homeroom_uid', uid);
 
-        let userData = { id: uid, email: loginEmail, username: input };
+        let userData = {
+          id: uid,
+          email: userCred.user.email || loginEmail,
+          username: input.includes('@') ? input.split('@')[0] : input.replace(/^@/, ''),
+          display_name: userCred.user.displayName || (input.includes('@') ? input.split('@')[0] : input.replace(/^@/, '')),
+          avatar_emoji: '🎓',
+          role: 'member',
+          xp: 0,
+          coins: 100
+        };
+
         try {
           if (db) {
             const userSnap = await safeGet(db.collection('users').doc(uid));
             if (userSnap && userSnap.exists) {
-              userData = userSnap.data();
+              userData = { ...userData, ...userSnap.data() };
+            } else {
+              // Create doc in Firestore if missing
+              await db.collection('users').doc(uid).set(userData, { merge: true }).catch(() => {});
             }
           }
         } catch (e) {
           console.warn('User profile fetch after login failed:', e);
         }
 
+        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(userData)); } catch(e) {}
         return { success: true, message: 'Login successful', data: { token: uid, user: userData } };
       }
 
       // 3. Auth Me
       if (path === '/auth/me' && method === 'GET') {
-        if (!currentUid) return { success: false, message: 'Not logged in' };
-        const userSnap = await safeGet(db.collection('users').doc(currentUid));
-        if (!userSnap.exists) return { success: false, message: 'User not found' };
-        const userData = userSnap.data();
-        return { success: true, data: { user: userData } };
+        const uid = currentUid || (auth && auth.currentUser ? auth.currentUser.uid : null);
+        if (!uid) return { success: false, message: 'Not logged in' };
+        
+        try {
+          if (db) {
+            const userSnap = await safeGet(db.collection('users').doc(uid));
+            if (userSnap && userSnap.exists) {
+              const userData = userSnap.data();
+              try { localStorage.setItem('homeroom_cached_user', JSON.stringify(userData)); } catch(e) {}
+              return { success: true, data: { user: userData } };
+            }
+          }
+        } catch (e) {
+          console.warn('Firestore fetch for /auth/me failed:', e);
+        }
+
+        // Fallback: If logged into Firebase Auth or token exists, construct user profile from cache or Firebase Auth object
+        const cachedUser = localStorage.getItem('homeroom_cached_user');
+        if (cachedUser) {
+          try {
+            return { success: true, data: { user: JSON.parse(cachedUser) } };
+          } catch(e) {}
+        }
+
+        const fbUser = auth ? auth.currentUser : null;
+        const fallbackUser = {
+          id: uid,
+          email: fbUser ? fbUser.email : 'user@homeroom.app',
+          username: fbUser ? (fbUser.displayName || fbUser.email?.split('@')[0] || 'User') : 'User',
+          display_name: fbUser ? (fbUser.displayName || 'Homeroom User') : 'Homeroom User',
+          avatar_emoji: '🎓',
+          role: 'member',
+          xp: 0,
+          coins: 100
+        };
+
+        if (db && uid) {
+          try { await db.collection('users').doc(uid).set(fallbackUser, { merge: true }); } catch(e) {}
+        }
+
+        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(fallbackUser)); } catch(e) {}
+        return { success: true, data: { user: fallbackUser } };
       }
 
       // 4. Users Profile
       if (path === '/users/me' && method === 'GET') {
-        if (!currentUid) return { success: false, message: 'Not logged in' };
-        const snap = await safeGet(db.collection('users').doc(currentUid));
-        const u = snap.data();
-        return { success: true, data: { ...u, user: u } };
+        const uid = currentUid || (auth && auth.currentUser ? auth.currentUser.uid : null);
+        if (!uid) return { success: false, message: 'Not logged in' };
+        
+        try {
+          if (db) {
+            const snap = await safeGet(db.collection('users').doc(uid));
+            if (snap && snap.exists) {
+              const u = snap.data();
+              return { success: true, data: { ...u, user: u } };
+            }
+          }
+        } catch (e) {}
+
+        const cachedUser = localStorage.getItem('homeroom_cached_user');
+        if (cachedUser) {
+          try {
+            const u = JSON.parse(cachedUser);
+            return { success: true, data: { ...u, user: u } };
+          } catch(e) {}
+        }
+        
+        return { success: false, message: 'User not found' };
       }
 
       if (path.startsWith('/users/') && method === 'GET') {
