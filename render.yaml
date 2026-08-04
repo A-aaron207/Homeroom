@@ -1,16 +1,31 @@
-# =============================================================
-# LEGACY — Render backend is no longer used.
-# Current Architecture:
-#   - Frontend: GitHub Pages (auto-deployed via .github/workflows/deploy.yml)
-#   - Database: Firebase Firestore (direct client-side SDK)
-#   - Source:   GitHub (A-aaron207/Homeroom)
+# Architecture:
+#   Source Code: GitHub (A-aaron207/Homeroom)
+#   Database:    Firebase Firestore + Auth + Storage (client-side SDK)
+#   Hosting:     Render (Flask serves the static frontend)
 #
-# This file is kept for historical reference only.
-# =============================================================
+# Render auto-deploys from the GitHub repo on every push to main.
+# All data operations go directly from the browser to Firebase —
+# the Flask backend only serves static HTML/JS/CSS files.
 
-# services:
-#   - type: web
-#     name: homeroom
-#     env: python
-#     buildCommand: pip install -r requirements.txt
-#     startCommand: gunicorn server.app:app
+services:
+  - type: web
+    name: homeroom
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server.app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: PORT
+        value: "10000"
+      - key: DB_PATH
+        value: /data/homeroom.db
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    disk:
+      name: homeroom-data
+      mountPath: /data
+      sizeGB: 1
+    healthCheckPath: /healthz

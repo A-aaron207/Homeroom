@@ -393,15 +393,56 @@ Homeroom.API = {
         return { success: true, data: msgData };
       }
 
-      // 6. Notes
+      // 6. Notes — Bookmarked List
+      if (path === '/notes/bookmarked' && method === 'GET') {
+        if (!currentUid) return { success: true, data: [] };
+        let bookmarkedIds = [];
+        try {
+          const bmSnap = await db.collection('users').doc(currentUid).collection('bookmarks').get();
+          bookmarkedIds = bmSnap.docs.map(d => d.id);
+        } catch(e) {}
+        if (!bookmarkedIds.length) return { success: true, data: [] };
+        // Firestore doesn't support 'in' with >10 items but notes are manageable
+        const chunks = [];
+        for (let i = 0; i < bookmarkedIds.length; i += 10) chunks.push(bookmarkedIds.slice(i, i+10));
+        let notes = [];
+        for (const chunk of chunks) {
+          const snap = await db.collection('notes').where(firebase.firestore.FieldPath.documentId(), 'in', chunk).get();
+          notes = notes.concat(snap.docs.map(d => ({ id: d.id, ...d.data(), is_bookmarked: true })));
+        }
+        return { success: true, data: notes };
+      }
+
+      // 6. Notes — General List (with optional subject/search/sort filters)
       if (path.startsWith('/notes') && method === 'GET') {
+        const urlParams = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
+        const subject = urlParams.get('subject');
+        const search = urlParams.get('search')?.toLowerCase();
         let snap;
         try {
-          snap = await db.collection('notes').orderBy('created_at', 'desc').limit(50).get();
+          let query = db.collection('notes');
+          if (subject) query = query.where('subject', '==', subject);
+          query = query.orderBy('created_at', 'desc').limit(50);
+          snap = await query.get();
         } catch (e) {
-          snap = await db.collection('notes').get();
+          snap = await db.collection('notes').limit(50).get();
         }
-        const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        let notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (search) {
+          notes = notes.filter(n =>
+            (n.title || '').toLowerCase().includes(search) ||
+            (n.description || '').toLowerCase().includes(search) ||
+            (Array.isArray(n.tags) ? n.tags.join(' ') : '').toLowerCase().includes(search)
+          );
+        }
+        // Attach bookmark status if user logged in
+        if (currentUid) {
+          try {
+            const bmSnap = await db.collection('users').doc(currentUid).collection('bookmarks').get();
+            const bookmarked = new Set(bmSnap.docs.map(d => d.id));
+            notes = notes.map(n => ({ ...n, is_bookmarked: bookmarked.has(n.id) }));
+          } catch(e) {}
+        }
         return { success: true, data: notes };
       }
 
@@ -443,7 +484,101 @@ Homeroom.API = {
         return { success: true, message: 'Note uploaded successfully!', data: noteData };
       }
 
+      // Note Rating: POST /notes/:id/rate
+      if (path.match(/^\/notes\/[^/]+\/rate$/) && method === 'POST') {
+        const noteId = path.split('/')[2];
+        const rating = parseInt(payload.rating) || 5;
+        const noteRef = db.collection('notes').doc(noteId);
+        await noteRef.update({
+          rating_sum: firebase.firestore.FieldValue.increment(rating),
+          rating_count: firebase.firestore.FieldValue.increment(1)
+        });
+        return { success: true, message: 'Rating submitted!' };
+      }
+
+      // Note Comments: POST /notes/:id/comment
+      if (path.match(/^\/notes\/[^/]+\/comment$/) && method === 'POST') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+        const noteId = path.split('/')[2];
+        const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
+        const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+        const commentRef = db.collection('notes').doc(noteId).collection('comments').doc();
+        const commentData = {
+          id: commentRef.id,
+          content: payload.content || '',
+          user_id: currentUid,
+          user_name: authorObj.display_name || authorObj.username || 'User',
+          avatar_emoji: authorObj.avatar_emoji || '🎓',
+          created_at: new Date().toISOString()
+        };
+        await commentRef.set(commentData);
+        return { success: true, message: 'Comment posted!', data: commentData };
+      }
+
+      // Note GET with comments: GET /notes/:id
+      if (path.match(/^\/notes\/[^/]+$/) && method === 'GET') {
+        const noteId = path.split('/')[2];
+        const noteSnap = await safeGet(db.collection('notes').doc(noteId)).catch(() => null);
+        if (!noteSnap || !noteSnap.exists) return { success: false, message: 'Note not found' };
+        let comments = [];
+        try {
+          const commentsSnap = await db.collection('notes').doc(noteId).collection('comments').orderBy('created_at', 'asc').get();
+          comments = commentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        } catch(e) {}
+        return { success: true, data: { ...noteSnap.data(), comments } };
+      }
+
+      // Note Bookmark Toggle: POST /notes/:id/bookmark
+      if (path.match(/^\/notes\/[^/]+\/bookmark$/) && method === 'POST') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+        const noteId = path.split('/')[2];
+        const bmRef = db.collection('users').doc(currentUid).collection('bookmarks').doc(noteId);
+        const bmSnap = await bmRef.get().catch(() => null);
+        if (bmSnap && bmSnap.exists) {
+          await bmRef.delete();
+          return { success: true, bookmarked: false, message: 'Bookmark removed' };
+        } else {
+          await bmRef.set({ note_id: noteId, bookmarked_at: new Date().toISOString() });
+          return { success: true, bookmarked: true, message: 'Note bookmarked!' };
+        }
+      }
+
+      // Message Reactions: POST /conversations/:convId/messages/:msgId/react
+      if (path.match(/^\/conversations\/[^/]+\/messages\/[^/]+\/react$/) && method === 'POST') {
+        const parts = path.split('/');
+        const convId = parts[2], msgId = parts[4];
+        const emoji = payload.emoji || '👍';
+        const msgRef = db.collection('conversations').doc(convId).collection('messages').doc(msgId);
+        const key = `reactions.${currentUid}`;
+        await msgRef.update({ [key]: emoji }).catch(() => {});
+        return { success: true };
+      }
+
+      // Message Delete: DELETE /conversations/:convId/messages/:msgId
+      if (path.match(/^\/conversations\/[^/]+\/messages\/[^/]+$/) && method === 'DELETE') {
+        const parts = path.split('/');
+        const convId = parts[2], msgId = parts[4];
+        await db.collection('conversations').doc(convId).collection('messages').doc(msgId)
+          .update({ content: '🗑️ Message deleted', deleted: true, deleted_at: new Date().toISOString() })
+          .catch(() => {});
+        return { success: true };
+      }
+
+      // Conversation Read/Delivered: POST /conversations/:id/read or /delivered
+      if (path.match(/^\/conversations\/[^/]+\/(read|delivered)$/) && method === 'POST') {
+        // Lightweight receipt — stored on the user's read-state subcollection
+        const convId = path.split('/')[2];
+        if (currentUid) {
+          await db.collection('conversations').doc(convId)
+            .collection('receipts').doc(currentUid)
+            .set({ last_read: new Date().toISOString() }, { merge: true })
+            .catch(() => {});
+        }
+        return { success: true };
+      }
+
       // 7. Q&A / Questions
+
       if ((path.startsWith('/questions') || path.startsWith('/qna')) && method === 'GET') {
         const cleanPath = path.split('?')[0];
         const parts = cleanPath.split('/').filter(Boolean);

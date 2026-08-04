@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homeroom-v7.0.0';
+const CACHE_NAME = 'homeroom-v8.0.0';
 const OFFLINE_URL = './offline.html';
 
 const STATIC_ASSETS = [
@@ -89,32 +89,8 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // API Calls Strategy: Network First with JSON fallback
-    if (url.pathname.startsWith('/api')) {
-        event.respondWith(
-            fetch(request).then((networkResponse) => {
-                // Clone and cache successful API responses
-                if (networkResponse.status === 200) {
-                    const responseClone = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-                }
-                return networkResponse;
-            }).catch(async () => {
-                const cachedResponse = await caches.match(request);
-                if (cachedResponse) {
-                    return cachedResponse;
-                }
-                return new Response(JSON.stringify({
-                    success: false,
-                    offline: true,
-                    message: 'You are operating in offline mode. Cached content loaded.'
-                }), {
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            })
-        );
-        return;
-    }
+    // Note: No /api backend routes exist in the GitHub Pages + Firebase architecture.
+    // All data operations go directly to Firebase Firestore via the client-side SDK.
 
     // HTML Navigation Requests Strategy: Network First, fallback to cached page or offline.html
     if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {

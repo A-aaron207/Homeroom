@@ -298,7 +298,7 @@ Homeroom.pages.notes = {
             </div>
 
         `, `
-            <a href="/api/notes/${note.id}/download" target="_blank" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; text-align: center; text-decoration: none; display: flex; justify-content: center; align-items: center; gap: 0.5rem; font-size: 1.1rem;" onclick="setTimeout(()=>Homeroom.pages.notes.loadNotes(), 1000)">
+            <a href="${note.file_url || '#'}" target="_blank" rel="noopener noreferrer" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; text-align: center; text-decoration: none; display: flex; justify-content: center; align-items: center; gap: 0.5rem; font-size: 1.1rem;" onclick="if(!('${note.file_url}')||'${note.file_url}'==='#'){event.preventDefault();Homeroom.toast('No file attached to this note.','info');return;}setTimeout(()=>Homeroom.pages.notes.loadNotes(), 1000)">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                 Download Note
             </a>

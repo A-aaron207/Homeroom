@@ -260,8 +260,8 @@ Homeroom.pages.settings = {
 
   logout() {
       if(confirm('Are you sure you want to log out?')) {
-          localStorage.removeItem('homeroom_token');
-          window.location.href = '/auth.html';
+          Homeroom.API.clearToken();
+          window.location.href = 'auth.html';
       }
   },
 
