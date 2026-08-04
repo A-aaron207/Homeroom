@@ -475,28 +475,37 @@ Homeroom.API = {
         if (payload.file instanceof File && payload.file.name && Homeroom.firebase && Homeroom.firebase.storage) {
           try {
             const storageRef = Homeroom.firebase.storage.ref().child(`notes/${Date.now()}_${payload.file.name}`);
-            await storageRef.put(payload.file);
-            fileUrl = await storageRef.getDownloadURL();
+            const uploadTask = storageRef.put(payload.file);
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Storage upload timeout')), 8000));
+            await Promise.race([uploadTask, timeoutPromise]);
+            fileUrl = await storageRef.getDownloadURL().catch(() => payload.file.name || '');
           } catch (e) {
-            console.warn('Firebase storage note upload warning:', e);
-            fileUrl = payload.file.name || '';
+            console.warn('Firebase storage note upload notice:', e);
+            fileUrl = payload.file.name ? `file://${payload.file.name}` : 'Note Document';
           }
         }
 
-        const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
-        const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+        const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+        const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
+        const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
+        const authorObj = {
+          id: String(rawAuthor.id || validUid),
+          username: String(rawAuthor.username || 'User'),
+          display_name: String(rawAuthor.display_name || rawAuthor.username || 'User'),
+          avatar_emoji: String(rawAuthor.avatar_emoji || '🎓')
+        };
 
         const noteData = {
           id: docRef.id,
-          title: payload.title || 'Untitled Note',
-          subject: payload.subject || 'General',
-          description: payload.description || '',
-          content: payload.content || payload.description || '',
-          file_url: fileUrl,
-          file_name: payload.file instanceof File ? payload.file.name : (payload.file_name || 'Note Document'),
+          title: String(payload.title || 'Untitled Note'),
+          subject: String(payload.subject || 'General'),
+          description: String(payload.description || ''),
+          content: String(payload.content || payload.description || ''),
+          file_url: String(fileUrl || ''),
+          file_name: payload.file instanceof File ? payload.file.name : String(payload.file_name || 'Note Document'),
           tags: Array.isArray(payload.tags) ? payload.tags : [],
-          author_id: currentUid,
-          author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
+          author_id: validUid,
+          author: authorObj,
           rating: 5.0,
           downloads_count: 0,
           created_at: new Date().toISOString()
@@ -642,23 +651,30 @@ Homeroom.API = {
         if (parts.length === 3 && parts[2] === 'answers') {
           const qId = parts[1];
           const ansRef = db.collection('questions').doc(qId).collection('answers').doc();
-          const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
-          const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+          const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+          const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
+          const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
+          const authorObj = {
+            id: String(rawAuthor.id || validUid),
+            username: String(rawAuthor.username || 'User'),
+            display_name: String(rawAuthor.display_name || rawAuthor.username || 'User'),
+            avatar_emoji: String(rawAuthor.avatar_emoji || '🎓')
+          };
 
           const ansData = {
             id: ansRef.id,
-            question_id: qId,
-            content: payload.content || '',
-            author_id: currentUid,
-            author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
+            question_id: String(qId),
+            content: String(payload.content || ''),
+            author_id: validUid,
+            author: authorObj,
             created_at: new Date().toISOString()
           };
           await ansRef.set(ansData);
 
           try {
-            await db.collection('questions').doc(qId).update({
+            await db.collection('questions').doc(qId).set({
               answer_count: firebase.firestore.FieldValue.increment(1)
-            });
+            }, { merge: true });
           } catch(e) {}
 
           return { success: true, message: 'Answer posted!', data: ansData };
@@ -666,18 +682,25 @@ Homeroom.API = {
 
         // Post new Question
         const docRef = db.collection('questions').doc();
-        const userSnap = await safeGet(db.collection('users').doc(currentUid)).catch(() => null);
-        const authorObj = userSnap && userSnap.exists ? userSnap.data() : { id: currentUid, username: 'User' };
+        const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+        const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
+        const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
+        const authorObj = {
+          id: String(rawAuthor.id || validUid),
+          username: String(rawAuthor.username || 'User'),
+          display_name: String(rawAuthor.display_name || rawAuthor.username || 'User'),
+          avatar_emoji: String(rawAuthor.avatar_emoji || '🎓')
+        };
 
         const qData = {
           id: docRef.id,
-          title: payload.title || 'Untitled Question',
-          subject: payload.subject || 'General',
-          content: payload.content || '',
+          title: String(payload.title || 'Untitled Question'),
+          subject: String(payload.subject || 'General'),
+          content: String(payload.content || payload.title || ''),
           tags: Array.isArray(payload.tags) ? payload.tags : [],
-          author_id: currentUid,
-          author: { id: authorObj.id, username: authorObj.username || 'User', display_name: authorObj.display_name || authorObj.username || 'User', avatar_emoji: authorObj.avatar_emoji || '🎓' },
-          asked_by_name: authorObj.display_name || authorObj.username || 'User',
+          author_id: validUid,
+          author: authorObj,
+          asked_by_name: authorObj.display_name,
           answer_count: 0,
           best_answer_count: 0,
           upvotes: 0,
