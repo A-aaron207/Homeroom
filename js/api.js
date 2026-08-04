@@ -2,6 +2,23 @@ window.Homeroom = window.Homeroom || {};
 
 Homeroom.API = {
   token: localStorage.getItem('homeroom_token'),
+  _authReadyPromise: null,
+
+  // Waits for Firebase Auth to restore the session before proceeding.
+  // This prevents the race condition where auth.currentUser is null on cold load.
+  waitForAuthReady() {
+    if (this._authReadyPromise) return this._authReadyPromise;
+    this._authReadyPromise = new Promise((resolve) => {
+      const auth = Homeroom.firebase ? Homeroom.firebase.auth : null;
+      if (!auth) { resolve(null); return; }
+      // onAuthStateChanged fires immediately with the current user (or null)
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        unsubscribe(); // only need it once
+        resolve(user ? user.uid : null);
+      });
+    });
+    return this._authReadyPromise;
+  },
 
   getToken() {
     if (!this.token) {
@@ -17,7 +34,9 @@ Homeroom.API = {
 
   clearToken() {
     this.token = null;
+    this._authReadyPromise = null; // Reset so next login re-runs auth state check
     localStorage.removeItem('homeroom_token');
+    localStorage.removeItem('homeroom_uid');
     try { if (Homeroom.firebase && Homeroom.firebase.auth) Homeroom.firebase.auth.signOut(); } catch(e) {}
   },
 
@@ -25,8 +44,18 @@ Homeroom.API = {
   async firebaseHandler(method, path, body) {
     const db = Homeroom.firebase ? Homeroom.firebase.db : null;
     const auth = Homeroom.firebase ? Homeroom.firebase.auth : null;
-    const currentUser = auth ? auth.currentUser : null;
-    const currentUid = currentUser ? currentUser.uid : (localStorage.getItem('homeroom_uid') || localStorage.getItem('homeroom_token'));
+
+    // Wait for Firebase Auth to fully restore the session.
+    // This resolves the race condition where auth.currentUser is null on cold load.
+    const uidFromAuth = await this.waitForAuthReady();
+    const currentUid = uidFromAuth || localStorage.getItem('homeroom_uid') || localStorage.getItem('homeroom_token');
+
+    // Keep localStorage in sync with the resolved Firebase UID
+    if (uidFromAuth && uidFromAuth !== localStorage.getItem('homeroom_uid')) {
+      localStorage.setItem('homeroom_uid', uidFromAuth);
+      localStorage.setItem('homeroom_token', uidFromAuth);
+      this.token = uidFromAuth;
+    }
     let payload = {};
     if (body) {
       if (typeof FormData !== 'undefined' && body instanceof FormData) {

@@ -5,7 +5,19 @@ Homeroom.auth = {
   isLoggedIn: false,
   
   async init() {
-    if (!Homeroom.API.token) {
+    // Wait for Firebase Auth to fully restore the session before checking login state.
+    // This prevents the race condition where auth.currentUser is null on cold load,
+    // which caused data to appear local-only (writes used wrong UID, reads fetched no data).
+    if (Homeroom.API.waitForAuthReady) {
+      const firebaseUid = await Homeroom.API.waitForAuthReady();
+      if (firebaseUid) {
+        // Sync token from Firebase Auth — the authoritative source
+        Homeroom.API.setToken(firebaseUid);
+        localStorage.setItem('homeroom_uid', firebaseUid);
+      }
+    }
+
+    if (!Homeroom.API.getToken()) {
         this.logout();
         return;
     }
