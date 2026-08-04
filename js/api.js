@@ -56,6 +56,19 @@ Homeroom.API = {
       localStorage.setItem('homeroom_token', uidFromAuth);
       this.token = uidFromAuth;
     }
+
+    // === DIAGNOSTIC LOGGING — visible in browser DevTools (F12 → Console) ===
+    console.group(`%c[Homeroom API] ${method} ${path}`, 'color: #6366f1; font-weight: bold;');
+    console.log('UID (from Firebase Auth):', uidFromAuth || '⚠️ NULL — not authenticated!');
+    console.log('UID (final used):', currentUid || '⚠️ NULL — no fallback either!');
+    console.log('Firestore db:', db ? '✅ Connected' : '❌ NULL — Firebase not initialized!');
+    console.log('Firebase Auth currentUser:', auth?.currentUser?.uid || '⚠️ null (may still be loading)');
+    if (!currentUid) {
+      console.error('[Homeroom] CRITICAL: currentUid is null. Data written without a valid user ID will not sync across devices!');
+    }
+    console.groupEnd();
+    // === END DIAGNOSTIC LOGGING ===
+
     let payload = {};
     if (body) {
       if (typeof FormData !== 'undefined' && body instanceof FormData) {
@@ -902,7 +915,8 @@ Homeroom.API = {
   },
 
   async request(method, path, body, isFormData = false) {
-    // If Firebase initialized, use Firestore Cloud Database directly
+    // Architecture: GitHub Pages (static frontend) + Firebase (database).
+    // There is no backend server — all data goes directly to Firebase Firestore.
     if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
       const fbResult = await this.firebaseHandler(method, path, body);
       if (fbResult !== null && fbResult !== undefined) {
@@ -912,37 +926,18 @@ Homeroom.API = {
         return fbResult;
       }
     }
-    
-    // HTTP Fallback
-    const headers = {};
-    const curToken = this.getToken();
-    if (curToken) headers['Authorization'] = `Bearer ${curToken}`;
-    if (!isFormData) headers['Content-Type'] = 'application/json';
 
-    try {
-      const res = await fetch('/api' + path, {
-        method,
-        headers,
-        body: body ? (isFormData ? body : JSON.stringify(body)) : null
-      });
-      const data = await res.json();
-      if (data && data.success && path === '/auth/me' && data.data && data.data.user) {
-        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(data.data.user)); } catch(e) {}
+    // Firebase unavailable — serve from localStorage cache (offline mode)
+    console.warn('[Homeroom] Firebase unavailable for', method, path, '— serving from local cache.');
+    if (path === '/auth/me') {
+      const cachedUser = localStorage.getItem('homeroom_cached_user');
+      if (cachedUser) {
+        try { return { success: true, data: { user: JSON.parse(cachedUser) } }; } catch(e) {}
       }
-      return data;
-    } catch(e) {
-      // Offline fallback for cached user profile
-      if (path === '/auth/me' && curToken) {
-        const cachedUser = localStorage.getItem('homeroom_cached_user');
-        if (cachedUser) {
-          try {
-            return { success: true, data: { user: JSON.parse(cachedUser) } };
-          } catch(err) {}
-        }
-      }
-      return { success: false, message: 'Network error' };
     }
+    return { success: false, message: 'Firebase is not available. Please check your internet connection.' };
   },
+
 
   get(path) { return this.request('GET', path); },
   post(path, body, isFormData = false) { return this.request('POST', path, body, isFormData); },
