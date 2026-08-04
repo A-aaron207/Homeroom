@@ -11,18 +11,24 @@ const firebaseConfig = window.FIREBASE_CONFIG || {
   measurementId: "G-C6HPMFZ1D2"
 };
 
-// Initialize Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+// Initialize Firebase safely
+if (typeof firebase !== 'undefined') {
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
+  Homeroom.firebase = {
+    auth: firebase.auth(),
+    db: firebase.firestore(),
+    storage: firebase.storage()
+  };
+
+  // Enable Firestore persistence for offline support
+  try {
+    Homeroom.firebase.db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+      console.warn('Firestore persistence notice:', err);
+    });
+  } catch (e) {}
+} else {
+  console.warn('Firebase CDN scripts not detected.');
 }
-
-Homeroom.firebase = {
-  auth: firebase.auth(),
-  db: firebase.firestore(),
-  storage: firebase.storage()
-};
-
-// Enable Firestore persistence for offline support
-try {
-  Homeroom.firebase.db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-} catch (e) {}

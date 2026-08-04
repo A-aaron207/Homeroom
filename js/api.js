@@ -9,13 +9,31 @@ Homeroom.API = {
   waitForAuthReady() {
     if (this._authReadyPromise) return this._authReadyPromise;
     this._authReadyPromise = new Promise((resolve) => {
-      const auth = Homeroom.firebase ? Homeroom.firebase.auth : null;
-      if (!auth) { resolve(null); return; }
-      // onAuthStateChanged fires immediately with the current user (or null)
-      const unsubscribe = auth.onAuthStateChanged((user) => {
-        unsubscribe(); // only need it once
-        resolve(user ? user.uid : null);
-      });
+      const getAuth = () => (Homeroom.firebase && Homeroom.firebase.auth) ? Homeroom.firebase.auth : (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      const auth = getAuth();
+      if (auth) {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          unsubscribe();
+          resolve(user ? user.uid : null);
+        });
+        return;
+      }
+
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        const dynamicAuth = getAuth();
+        if (dynamicAuth) {
+          clearInterval(interval);
+          const unsubscribe = dynamicAuth.onAuthStateChanged((user) => {
+            unsubscribe();
+            resolve(user ? user.uid : null);
+          });
+        } else if (attempts >= 15) {
+          clearInterval(interval);
+          resolve(null);
+        }
+      }, 100);
     });
     return this._authReadyPromise;
   },
@@ -117,17 +135,17 @@ Homeroom.API = {
 
     try {
 
-      // Safe Firestore get with live server preference
+      // Safe Firestore get with graceful network & offline fallbacks
       const safeGet = async (ref) => {
-        if (!ref) return null;
+        if (!ref) return { exists: false, data: () => ({}), docs: [] };
         try {
-          return await ref.get({ source: 'server' });
+          return await ref.get();
         } catch (serverErr) {
+          console.warn('Firestore safeGet fallback:', serverErr);
           try {
-            return await ref.get();
+            return await ref.get({ source: 'cache' });
           } catch (cacheErr) {
-            console.warn('Firestore fetch fallback:', cacheErr);
-            throw serverErr;
+            return { exists: false, data: () => ({}), docs: [] };
           }
         }
       };
@@ -366,11 +384,8 @@ Homeroom.API = {
 
       if (path.includes('/messages') && method === 'GET') {
         const convId = path.split('/')[2];
-        const snap = await db.collection('conversations').doc(convId).collection('messages')
-          .orderBy('created_at', 'asc')
-          .limit(100)
-          .get();
-        const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const snap = await safeGet(db.collection('conversations').doc(convId).collection('messages').orderBy('created_at', 'asc').limit(100));
+        const msgs = (snap && snap.docs) ? snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) : [];
         return { success: true, data: msgs };
       }
 
@@ -398,8 +413,8 @@ Homeroom.API = {
         if (!currentUid) return { success: true, data: [] };
         let bookmarkedIds = [];
         try {
-          const bmSnap = await db.collection('users').doc(currentUid).collection('bookmarks').get();
-          bookmarkedIds = bmSnap.docs.map(d => d.id);
+          const bmSnap = await safeGet(db.collection('users').doc(currentUid).collection('bookmarks'));
+          bookmarkedIds = (bmSnap && bmSnap.docs) ? bmSnap.docs.map(d => d.id) : [];
         } catch(e) {}
         if (!bookmarkedIds.length) return { success: true, data: [] };
         // Firestore doesn't support 'in' with >10 items but notes are manageable
@@ -407,8 +422,10 @@ Homeroom.API = {
         for (let i = 0; i < bookmarkedIds.length; i += 10) chunks.push(bookmarkedIds.slice(i, i+10));
         let notes = [];
         for (const chunk of chunks) {
-          const snap = await db.collection('notes').where(firebase.firestore.FieldPath.documentId(), 'in', chunk).get();
-          notes = notes.concat(snap.docs.map(d => ({ id: d.id, ...d.data(), is_bookmarked: true })));
+          const snap = await safeGet(db.collection('notes').where(firebase.firestore.FieldPath.documentId(), 'in', chunk));
+          if (snap && snap.docs) {
+            notes = notes.concat(snap.docs.map(d => ({ id: d.id, ...d.data(), is_bookmarked: true })));
+          }
         }
         return { success: true, data: notes };
       }
@@ -423,11 +440,11 @@ Homeroom.API = {
           let query = db.collection('notes');
           if (subject) query = query.where('subject', '==', subject);
           query = query.orderBy('created_at', 'desc').limit(50);
-          snap = await query.get();
+          snap = await safeGet(query);
         } catch (e) {
-          snap = await db.collection('notes').limit(50).get();
+          snap = await safeGet(db.collection('notes').limit(50));
         }
-        let notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        let notes = (snap && snap.docs) ? snap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         if (search) {
           notes = notes.filter(n =>
             (n.title || '').toLowerCase().includes(search) ||
@@ -438,8 +455,8 @@ Homeroom.API = {
         // Attach bookmark status if user logged in
         if (currentUid) {
           try {
-            const bmSnap = await db.collection('users').doc(currentUid).collection('bookmarks').get();
-            const bookmarked = new Set(bmSnap.docs.map(d => d.id));
+            const bmSnap = await safeGet(db.collection('users').doc(currentUid).collection('bookmarks'));
+            const bookmarked = new Set((bmSnap && bmSnap.docs) ? bmSnap.docs.map(d => d.id) : []);
             notes = notes.map(n => ({ ...n, is_bookmarked: bookmarked.has(n.id) }));
           } catch(e) {}
         }
@@ -522,8 +539,8 @@ Homeroom.API = {
         if (!noteSnap || !noteSnap.exists) return { success: false, message: 'Note not found' };
         let comments = [];
         try {
-          const commentsSnap = await db.collection('notes').doc(noteId).collection('comments').orderBy('created_at', 'asc').get();
-          comments = commentsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const commentsSnap = await safeGet(db.collection('notes').doc(noteId).collection('comments').orderBy('created_at', 'asc'));
+          comments = (commentsSnap && commentsSnap.docs) ? commentsSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         } catch(e) {}
         return { success: true, data: { ...noteSnap.data(), comments } };
       }
@@ -533,7 +550,7 @@ Homeroom.API = {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const noteId = path.split('/')[2];
         const bmRef = db.collection('users').doc(currentUid).collection('bookmarks').doc(noteId);
-        const bmSnap = await bmRef.get().catch(() => null);
+        const bmSnap = await safeGet(bmRef);
         if (bmSnap && bmSnap.exists) {
           await bmRef.delete();
           return { success: true, bookmarked: false, message: 'Bookmark removed' };
@@ -591,12 +608,12 @@ Homeroom.API = {
           
           let answers = [];
           try {
-            const ansSnap = await db.collection('questions').doc(qId).collection('answers').orderBy('created_at', 'asc').get();
-            answers = ansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const ansSnap = await safeGet(db.collection('questions').doc(qId).collection('answers').orderBy('created_at', 'asc'));
+            answers = (ansSnap && ansSnap.docs) ? ansSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
           } catch(e) {
             try {
-              const ansSnap = await db.collection('questions').doc(qId).collection('answers').get();
-              answers = ansSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              const ansSnap = await safeGet(db.collection('questions').doc(qId).collection('answers'));
+              answers = (ansSnap && ansSnap.docs) ? ansSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
             } catch(e2) {}
           }
           return { success: true, data: { ...qSnap.data(), answers } };
@@ -604,11 +621,11 @@ Homeroom.API = {
 
         let snap;
         try {
-          snap = await db.collection('questions').orderBy('created_at', 'desc').limit(50).get();
+          snap = await safeGet(db.collection('questions').orderBy('created_at', 'desc').limit(50));
         } catch(e) {
-          snap = await db.collection('questions').get();
+          snap = await safeGet(db.collection('questions'));
         }
-        const questions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const questions = (snap && snap.docs) ? snap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         return { success: true, data: questions };
       }
 
@@ -670,8 +687,8 @@ Homeroom.API = {
       if (path.startsWith('/tasks') && method === 'GET') {
         let tasks = [];
         try {
-          const snap = await db.collection('tasks').get();
-          tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const snap = await safeGet(db.collection('tasks'));
+          tasks = (snap && snap.docs) ? snap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         } catch(e) {
           tasks = [];
         }
@@ -753,11 +770,11 @@ Homeroom.API = {
       if (path.startsWith('/leaderboard') && method === 'GET') {
         let snap;
         try {
-          snap = await db.collection('users').orderBy('xp', 'desc').limit(25).get();
+          snap = await safeGet(db.collection('users').orderBy('xp', 'desc').limit(25));
         } catch (e) {
-          snap = await db.collection('users').limit(25).get();
+          snap = await safeGet(db.collection('users').limit(25));
         }
-        const users = snap.docs.map(d => d.data());
+        const users = (snap && snap.docs) ? snap.docs.map(d => d.data()) : [];
         return { success: true, data: users };
       }
 
@@ -765,8 +782,8 @@ Homeroom.API = {
       if (path === '/daily/checkin' && method === 'POST') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const uRef = db.collection('users').doc(currentUid);
-        const uSnap = await uRef.get();
-        const uData = uSnap.data() || {};
+        const uSnap = await safeGet(uRef);
+        const uData = (uSnap && typeof uSnap.data === 'function') ? uSnap.data() || {} : {};
 
         const getLocalDateStr = (d) => {
           const date = d ? new Date(d) : new Date();
@@ -815,8 +832,8 @@ Homeroom.API = {
       if (path === '/daily/spin' && method === 'POST') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const uRef = db.collection('users').doc(currentUid);
-        const uSnap = await uRef.get();
-        const uData = uSnap.data() || {};
+        const uSnap = await safeGet(uRef);
+        const uData = (uSnap && typeof uSnap.data === 'function') ? uSnap.data() || {} : {};
 
         const getLocalDateStr = (d) => {
           const date = d ? new Date(d) : new Date();
@@ -865,11 +882,11 @@ Homeroom.API = {
       if (path === '/users' && method === 'GET') {
         let snap;
         try {
-          snap = await db.collection('users').limit(100).get();
+          snap = await safeGet(db.collection('users').limit(100));
         } catch(e) {
           snap = { docs: [] };
         }
-        const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const users = (snap && snap.docs) ? snap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         return { success: true, data: users };
       }
 
@@ -884,15 +901,15 @@ Homeroom.API = {
         
         let txSnap;
         try {
-          txSnap = await db.collection('users').doc(currentUid).collection('transactions').orderBy('created_at', 'desc').limit(20).get();
+          txSnap = await safeGet(db.collection('users').doc(currentUid).collection('transactions').orderBy('created_at', 'desc').limit(20));
         } catch(e) {
           try {
-            txSnap = await db.collection('users').doc(currentUid).collection('transactions').get();
+            txSnap = await safeGet(db.collection('users').doc(currentUid).collection('transactions'));
           } catch(e2) {
             txSnap = { docs: [] };
           }
         }
-        const transactions = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const transactions = (txSnap && txSnap.docs) ? txSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];
         if (transactions.length === 0) {
           transactions.push({ id: 'tx_init', type: 'earned', amount: 100, reason: 'Welcome Bonus 🎁', created_at: uData.created_at || new Date().toISOString() });
         }
@@ -908,8 +925,8 @@ Homeroom.API = {
         const senderRef = db.collection('users').doc(currentUid);
         const recipientRef = db.collection('users').doc(recipientId);
 
-        const senderSnap = await senderRef.get();
-        const senderData = senderSnap.data() || {};
+        const senderSnap = await safeGet(senderRef);
+        const senderData = (senderSnap && typeof senderSnap.data === 'function') ? senderSnap.data() || {} : {};
         if ((senderData.coins || 0) < amount) {
           return { success: false, message: 'Insufficient ClassCoins balance' };
         }
@@ -958,8 +975,8 @@ Homeroom.API = {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const itemId = path.split('/')[3];
         const userRef = db.collection('users').doc(currentUid);
-        const userSnap = await userRef.get();
-        const userData = userSnap.data() || {};
+        const userSnap = await safeGet(userRef);
+        const userData = (userSnap && typeof userSnap.data === 'function') ? userSnap.data() || {} : {};
         
         const catalog = { 'theme_neon': 150, 'theme_sunset': 150, 'avatar_crown': 200, 'avatar_dragon': 300, 'title_master': 250 };
         const price = catalog[itemId] || 100;
@@ -1042,17 +1059,26 @@ Homeroom.API = {
       if (path && path.startsWith('/auth')) {
         return { success: false, message: getFriendlyAuthError(err) };
       }
-      if (err && err.message && (err.message.includes('offline') || err.message.includes('unavailable') || err.message.includes('network') || err.message.includes('Failed to get'))) {
-        return null;
+      if (err && err.message && (err.message.includes('offline') || err.message.includes('unavailable') || err.message.includes('network') || err.message.includes('Failed to get') || err.message.includes('fetch'))) {
+        if (method === 'GET') {
+          return { success: true, data: [] };
+        }
+        return { success: false, message: 'Firebase connection error. Please verify network and authorized domains in Firebase Console.' };
       }
       return { success: false, message: err.message || 'Database error' };
     }
   },
 
   async request(method, path, body, isFormData = false) {
-    // Architecture: GitHub Pages (static frontend) + Firebase (database).
-    // There is no backend server — all data goes directly to Firebase Firestore.
-    if (window.firebase && window.firebase.apps && window.firebase.apps.length) {
+    // Architecture: Render (app hosting) + GitHub (source) + Firebase (database).
+    // All data operations go directly to Firebase Firestore via client-side SDK.
+    const isFbReady = () => (window.firebase && window.firebase.apps && window.firebase.apps.length) || (Homeroom.firebase && Homeroom.firebase.db);
+    
+    if (!isFbReady() && this.waitForAuthReady) {
+      await this.waitForAuthReady();
+    }
+
+    if (isFbReady()) {
       const fbResult = await this.firebaseHandler(method, path, body);
       if (fbResult !== null && fbResult !== undefined) {
         if (fbResult.success && path === '/auth/me' && fbResult.data && fbResult.data.user) {
@@ -1070,7 +1096,10 @@ Homeroom.API = {
         try { return { success: true, data: { user: JSON.parse(cachedUser) } }; } catch(e) {}
       }
     }
-    return { success: false, message: 'Firebase is not available. Please check your internet connection.' };
+    if (method === 'GET') {
+      return { success: true, data: [] };
+    }
+    return { success: false, message: 'Firebase is not available. Please check your internet connection or domain authorization in Firebase Console.' };
   },
 
 
