@@ -135,13 +135,18 @@ Homeroom.API = {
 
     try {
 
-      // Safe Firestore get with graceful network & offline fallbacks
+      // Safe Firestore get with error surfacing for permission/rules failures
       const safeGet = async (ref) => {
         if (!ref) return { exists: false, data: () => ({}), docs: [] };
         try {
           return await ref.get();
         } catch (serverErr) {
-          console.warn('Firestore safeGet fallback:', serverErr);
+          // Surface permission and query precondition errors to calling scope
+          if (serverErr && (serverErr.code === 'permission-denied' || serverErr.code === 'failed-precondition')) {
+            console.error('Firestore permission/query error:', serverErr);
+            throw serverErr;
+          }
+          console.warn('Firestore safeGet cache fallback:', serverErr);
           try {
             return await ref.get({ source: 'cache' });
           } catch (cacheErr) {
@@ -349,12 +354,12 @@ Homeroom.API = {
 
       if (path === '/users/me' && method === 'PUT') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
-        await db.collection('users').doc(currentUid).update({
+        await db.collection('users').doc(currentUid).set({
           ...body,
           updated_at: new Date().toISOString()
-        });
+        }, { merge: true });
         const snap = await safeGet(db.collection('users').doc(currentUid));
-        const u = snap.data();
+        const u = (snap && typeof snap.data === 'function') ? snap.data() || {} : {};
         return { success: true, message: 'Profile updated', data: { ...u, user: u } };
       }
 
@@ -401,10 +406,10 @@ Homeroom.API = {
           created_at: new Date().toISOString()
         };
         await msgRef.set(msgData);
-        await db.collection('conversations').doc(convId).update({
+        await db.collection('conversations').doc(convId).set({
           last_message_content: body.content,
           last_message_time: new Date().toISOString()
-        });
+        }, { merge: true });
         return { success: true, data: msgData };
       }
 
@@ -813,14 +818,14 @@ Homeroom.API = {
         const rewardCoins = 20 + Math.min(newStreak * 5, 50);
         const rewardXp = 40 + Math.min(newStreak * 10, 100);
 
-        await uRef.update({
+        await uRef.set({
           streak_current: newStreak,
           streak_longest: Math.max(newStreak, uData.streak_longest || 1),
           coins: firebase.firestore.FieldValue.increment(rewardCoins),
           coins_earned: firebase.firestore.FieldValue.increment(rewardCoins),
           xp: firebase.firestore.FieldValue.increment(rewardXp),
           last_checkin_date: new Date().toISOString()
-        });
+        }, { merge: true });
 
         return {
           success: true,
@@ -860,12 +865,12 @@ Homeroom.API = {
         if (reward.type === 'coins') newCoins += reward.amount;
         if (reward.type === 'xp') newXp += reward.amount;
 
-        await uRef.update({
+        await uRef.set({
           coins: newCoins,
           coins_earned: firebase.firestore.FieldValue.increment(reward.type === 'coins' ? reward.amount : 0),
           xp: newXp,
           last_spin_date: new Date().toISOString()
-        });
+        }, { merge: true });
 
         return {
           success: true,
@@ -931,15 +936,15 @@ Homeroom.API = {
           return { success: false, message: 'Insufficient ClassCoins balance' };
         }
 
-        await senderRef.update({
+        await senderRef.set({
           coins: firebase.firestore.FieldValue.increment(-amount),
           coins_spent: firebase.firestore.FieldValue.increment(amount)
-        });
+        }, { merge: true });
 
-        await recipientRef.update({
+        await recipientRef.set({
           coins: firebase.firestore.FieldValue.increment(amount),
           coins_earned: firebase.firestore.FieldValue.increment(amount)
-        }).catch(() => {});
+        }, { merge: true }).catch(() => {});
 
         const txReason = payload.reason || 'Coins Transfer';
         await senderRef.collection('transactions').doc().set({
@@ -988,11 +993,11 @@ Homeroom.API = {
         const items = Array.isArray(userData.purchased_items) ? userData.purchased_items : [];
         if (!items.includes(itemId)) items.push(itemId);
 
-        await userRef.update({
+        await userRef.set({
           coins: firebase.firestore.FieldValue.increment(-price),
           coins_spent: firebase.firestore.FieldValue.increment(price),
           purchased_items: items
-        });
+        }, { merge: true });
 
         return { success: true, message: 'Item purchased successfully!' };
       }
@@ -1053,6 +1058,9 @@ Homeroom.API = {
       return { success: true, data: [] };
     } catch (err) {
       console.warn('Firebase error:', err);
+      if (err && (err.code === 'permission-denied' || (err.message && err.message.includes('permission')))) {
+        return { success: false, message: '🔒 Permission denied: Check Firestore security rules in Firebase Console.' };
+      }
       if (err && err.code && err.code.startsWith('auth/')) {
         return { success: false, message: getFriendlyAuthError(err) };
       }

@@ -1,0 +1,143 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
+          request.auth.token.email == 'aaronsaha.22@gmail.com'
+        );
+    }
+
+    // ---------- users/{uid} ----------
+    match /users/{uid} {
+      // Any signed-in user can read profiles (leaderboard, search, chat participants, etc.)
+      allow read: if signedIn();
+
+      // A user can create/update their own doc; admins can update any (approve/promote/etc.)
+      allow create: if isSelf(uid);
+      allow update: if isSelf(uid) || isAdmin();
+      allow delete: if isAdmin();
+
+      // users/{uid}/bookmarks/{noteId} — private to the owner
+      match /bookmarks/{noteId} {
+        allow read, write: if isSelf(uid);
+      }
+
+      // users/{uid}/transactions/{txId} — owner can read; writes happen via wallet
+      // transfer logic that touches sender + recipient in one request, so allow
+      // any signed-in user to create a transaction record for either side of a
+      // transfer, but only the owner (or admin) can read/delete their own history.
+      match /transactions/{txId} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow create: if signedIn();
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ---------- notes/{noteId} ----------
+    match /notes/{noteId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (
+        request.resource.data.author_id == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
+      allow update: if signedIn(); // Allow ratings, comments count, and downloads
+      allow delete: if signedIn() && (
+        resource.data.author_id == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isAdmin()
+      );
+
+      // notes/{noteId}/comments/{commentId}
+      match /comments/{commentId} {
+        allow read, create: if signedIn();
+        allow update, delete: if signedIn() && (
+          resource.data.user_id == request.auth.uid ||
+          resource.data.author_id == request.auth.uid ||
+          isAdmin()
+        );
+      }
+    }
+
+    // ---------- questions/{qId} (Q&A) ----------
+    match /questions/{qId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && (
+        request.resource.data.author_id == request.auth.uid ||
+        request.resource.data.user_id == request.auth.uid
+      );
+      // Updates also happen to bump answer counts or upvotes on someone else's question
+      allow update: if signedIn();
+      allow delete: if signedIn() && (
+        resource.data.author_id == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isAdmin()
+      );
+
+      // questions/{qId}/answers/{aId}
+      match /answers/{aId} {
+        allow read, create: if signedIn();
+        allow update, delete: if signedIn() && (
+          resource.data.author_id == request.auth.uid ||
+          resource.data.user_id == request.auth.uid ||
+          isAdmin()
+        );
+      }
+    }
+
+    // ---------- tasks/{taskId} ----------
+    match /tasks/{taskId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn();
+
+      // tasks/{taskId}/submissions/{uid} — the submission doc id IS the submitter's uid
+      match /submissions/{uid} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow create, update: if isSelf(uid);
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ---------- conversations/{convId} ----------
+    match /conversations/{convId} {
+      allow read: if signedIn() &&
+        request.auth.uid in resource.data.participant_ids;
+      allow create: if signedIn() &&
+        request.auth.uid in request.resource.data.participant_ids;
+      allow update: if signedIn() &&
+        request.auth.uid in resource.data.participant_ids;
+      allow delete: if isAdmin();
+
+      // conversations/{convId}/messages/{msgId}
+      match /messages/{msgId} {
+        allow read: if signedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids;
+        allow create: if signedIn() &&
+          (request.resource.data.sender_id == request.auth.uid || request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids);
+        allow update, delete: if signedIn() &&
+          (resource.data.sender_id == request.auth.uid || isAdmin());
+      }
+
+      // conversations/{convId}/receipts/{uid} — read-receipt doc id is the reader's uid
+      match /receipts/{uid} {
+        allow read: if signedIn() &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids;
+        allow write: if isSelf(uid);
+      }
+    }
+  }
+}
