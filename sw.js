@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homeroom-v8.0.0';
+const CACHE_NAME = 'homeroom-v8.1.0';
 const OFFLINE_URL = './offline.html';
 
 const STATIC_ASSETS = [
@@ -89,8 +89,23 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Note: No /api backend routes exist in the GitHub Pages + Firebase architecture.
-    // All data operations go directly to Firebase Firestore via the client-side SDK.
+    // ── CRITICAL: Never intercept Firebase / Google API traffic ──────────────
+    // Firestore uses a long-lived streaming GET (/Listen/channel) for real-time
+    // updates. If the SW tries to cache or respond to it, the stream breaks and
+    // all Firestore reads/writes fail with "unexpected error" or permission-denied.
+    const PASSTHROUGH_HOSTS = [
+        'firestore.googleapis.com',
+        'firebase.googleapis.com',
+        'firebaseapp.com',
+        'firebasestorage.googleapis.com',
+        'identitytoolkit.googleapis.com',
+        'securetoken.googleapis.com',
+        'apis.google.com',
+    ];
+    if (PASSTHROUGH_HOSTS.some(host => url.hostname.includes(host))) {
+        return; // Let the browser handle Firebase traffic directly
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // HTML Navigation Requests Strategy: Network First, fallback to cached page or offline.html
     if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
