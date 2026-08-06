@@ -485,7 +485,8 @@ Homeroom.API = {
           }
         }
 
-        const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+        const validUid = (auth?.currentUser?.uid) || currentUid || localStorage.getItem('homeroom_uid');
+        if (!validUid) return { success: false, message: 'You must be signed in. Please log out and log back in.' };
         const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
         const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
         const authorObj = {
@@ -653,7 +654,8 @@ Homeroom.API = {
         if (parts.length === 3 && parts[2] === 'answers') {
           const qId = parts[1];
           const ansRef = db.collection('questions').doc(qId).collection('answers').doc();
-          const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+          const validUid = (auth?.currentUser?.uid) || currentUid || localStorage.getItem('homeroom_uid');
+          if (!validUid) return { success: false, message: 'You must be signed in. Please log out and log back in.' };
           const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
           const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
           const authorObj = {
@@ -721,7 +723,8 @@ Homeroom.API = {
 
         // Post new Question
         const docRef = db.collection('questions').doc();
-        const validUid = currentUid || auth?.currentUser?.uid || localStorage.getItem('homeroom_uid') || 'anonymous_user';
+        const validUid = (auth?.currentUser?.uid) || currentUid || localStorage.getItem('homeroom_uid');
+        if (!validUid) return { success: false, message: 'You must be signed in. Please log out and log back in.' };
         const userSnap = await safeGet(db.collection('users').doc(validUid)).catch(() => null);
         const rawAuthor = (userSnap && typeof userSnap.data === 'function') ? (userSnap.data() || {}) : {};
         const authorObj = {
