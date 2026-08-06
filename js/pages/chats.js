@@ -500,7 +500,7 @@ Homeroom.pages.chats = {
   },
 
   async react(msgId, emoji) {
-    const res = await Homeroom.API.post(`/messages/${msgId}/react`, { emoji });
+    const res = await Homeroom.API.post(`/conversations/${this.currentChatId}/messages/${msgId}/react`, { emoji });
     if (res.success) this.loadMessages(this.currentChatId, true);
   },
 
@@ -522,7 +522,7 @@ Homeroom.pages.chats = {
 
   async deleteMsg(msgId) {
     if (!confirm('Delete this message for everyone?')) return;
-    const res = await Homeroom.API.delete(`/messages/${msgId}`);
+    const res = await Homeroom.API.delete(`/conversations/${this.currentChatId}/messages/${msgId}`);
     if (res.success) {
       Homeroom.toast('Message deleted', 'info');
       this.loadMessages(this.currentChatId, true);

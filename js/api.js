@@ -504,6 +504,7 @@ Homeroom.API = {
           file_url: String(fileUrl || ''),
           file_name: payload.file instanceof File ? payload.file.name : String(payload.file_name || 'Note Document'),
           tags: Array.isArray(payload.tags) ? payload.tags : [],
+          user_id: validUid,
           author_id: validUid,
           author: authorObj,
           rating: 5.0,
@@ -538,6 +539,7 @@ Homeroom.API = {
           id: commentRef.id,
           content: payload.content || '',
           user_id: currentUid,
+          author_id: currentUid,
           user_name: authorObj.display_name || authorObj.username || 'User',
           avatar_emoji: authorObj.avatar_emoji || '🎓',
           created_at: new Date().toISOString()
@@ -665,6 +667,7 @@ Homeroom.API = {
             id: ansRef.id,
             question_id: String(qId),
             content: String(payload.content || ''),
+            user_id: validUid,
             author_id: validUid,
             author: authorObj,
             created_at: new Date().toISOString()
@@ -678,6 +681,42 @@ Homeroom.API = {
           } catch(e) {}
 
           return { success: true, message: 'Answer posted!', data: ansData };
+        }
+
+        // Upvote Question: POST /questions/:id/upvote
+        if (parts.length === 3 && parts[2] === 'upvote') {
+          const qId = parts[1];
+          await db.collection('questions').doc(qId).set({
+            upvotes: firebase.firestore.FieldValue.increment(1)
+          }, { merge: true });
+          return { success: true, message: 'Question upvoted!' };
+        }
+
+        // Upvote Answer: POST /questions/:qId/answers/:id/upvote
+        if (parts.length === 5 && parts[2] === 'answers' && parts[4] === 'upvote') {
+          const qId = parts[1], ansId = parts[3];
+          await db.collection('questions').doc(qId).collection('answers').doc(ansId).set({
+            upvotes: firebase.firestore.FieldValue.increment(1)
+          }, { merge: true });
+          return { success: true, message: 'Answer upvoted!' };
+        }
+
+        // Mark Best Answer: POST /questions/:qId/answers/:id/best
+        if (parts.length === 5 && parts[2] === 'answers' && parts[4] === 'best') {
+          const qId = parts[1], ansId = parts[3];
+          try {
+            const existingBest = await safeGet(db.collection('questions').doc(qId).collection('answers').where('is_best', '==', true));
+            for (const doc of (existingBest.docs || [])) {
+              await doc.ref.set({ is_best: false }, { merge: true });
+            }
+          } catch(e) {}
+          await db.collection('questions').doc(qId).collection('answers').doc(ansId).set({
+            is_best: true
+          }, { merge: true });
+          await db.collection('questions').doc(qId).set({
+            best_answer_count: firebase.firestore.FieldValue.increment(1)
+          }, { merge: true }).catch(() => {});
+          return { success: true, message: 'Best answer marked!' };
         }
 
         // Post new Question
@@ -698,6 +737,7 @@ Homeroom.API = {
           subject: String(payload.subject || 'General'),
           content: String(payload.content || payload.title || ''),
           tags: Array.isArray(payload.tags) ? payload.tags : [],
+          user_id: validUid,
           author_id: validUid,
           author: authorObj,
           asked_by_name: authorObj.display_name,
@@ -990,11 +1030,21 @@ Homeroom.API = {
       // 13. Marketplace
       if (path === '/marketplace' && method === 'GET') {
         const catalog = [
-          { id: 'theme_neon', name: 'Cyber Neon Theme', type: 'theme', price: 150, icon: '🎨', description: 'Futuristic glowing neon aesthetic for your interface.' },
-          { id: 'theme_sunset', name: 'Golden Sunset Theme', type: 'theme', price: 150, icon: '🌅', description: 'Warm amber gradients for cozy study sessions.' },
-          { id: 'avatar_crown', name: 'Scholar Crown Avatar', type: 'avatar', price: 200, icon: '👑', description: 'Exclusive crown avatar badge.' },
-          { id: 'avatar_dragon', name: 'Dragon Companion', type: 'avatar', price: 300, icon: '🐉', description: 'Legendary dragon avatar icon.' },
-          { id: 'title_master', name: 'Class Master Title', type: 'title', price: 250, icon: '🏅', description: 'Show off your dedication with the Class Master title.' }
+          { id: 'theme_cyber', name: 'Cyber Theme', description: 'Neon cyan & magenta interface', category: 'theme', type: 'theme', price: 200, icon: '🌐' },
+          { id: 'theme_matrix', name: 'Matrix Theme', description: 'Classic green digital rain aesthetic', category: 'theme', type: 'theme', price: 200, icon: '💚' },
+          { id: 'theme_solo', name: 'Solo Leveling Theme', description: 'Purple shadow monarch aesthetic', category: 'theme', type: 'theme', price: 300, icon: '⚔️' },
+          { id: 'theme_neon', name: 'Cyber Neon Theme', description: 'Futuristic glowing neon aesthetic', category: 'theme', type: 'theme', price: 150, icon: '🎨' },
+          { id: 'theme_sunset', name: 'Golden Sunset Theme', description: 'Warm amber gradients for study', category: 'theme', type: 'theme', price: 150, icon: '🌅' },
+          { id: 'theme_light', name: 'Light Theme', description: 'Clean light mode styling', category: 'theme', type: 'theme', price: 50, icon: '☀️' },
+          { id: 'color_gold', name: 'Golden Username', description: 'Shiny gold username styling', category: 'username_color', type: 'username_color', price: 400, icon: '🏅' },
+          { id: 'color_rainbow', name: 'Rainbow Username', description: 'Vibrant rainbow username gradient', category: 'username_color', type: 'username_color', price: 500, icon: '🌈' },
+          { id: 'color_fire', name: 'Fire Username', description: 'Blazing red-orange username effect', category: 'username_color', type: 'username_color', price: 300, icon: '🔥' },
+          { id: 'frame_animated', name: 'Animated Avatar Border', description: 'Glowing animated halo ring', category: 'profile_frame', type: 'profile_frame', price: 150, icon: '💫' },
+          { id: 'frame_diamond', name: 'Diamond Frame', description: 'Sparkling diamond border', category: 'profile_frame', type: 'profile_frame', price: 350, icon: '💎' },
+          { id: 'badge_vip', name: 'VIP Badge', description: 'Exclusive VIP crown badge', category: 'badge', type: 'badge', price: 250, icon: '👑' },
+          { id: 'avatar_dragon', name: 'Dragon Companion', description: 'Legendary dragon avatar icon', category: 'badge', type: 'badge', price: 300, icon: '🐉' },
+          { id: 'title_master', name: 'Class Master Title', description: 'Show off your dedication with title', category: 'badge', type: 'badge', price: 250, icon: '🏆' },
+          { id: 'card_premium', name: 'Premium Profile Card', description: 'Animated profile background', category: 'profile_card', type: 'profile_card', price: 500, icon: '🎴' }
         ];
         return { success: true, data: catalog };
       }
@@ -1002,25 +1052,67 @@ Homeroom.API = {
       if (path.includes('/marketplace/purchase/') && method === 'POST') {
         if (!currentUid) return { success: false, message: 'Not logged in' };
         const itemId = path.split('/')[3];
-        const userRef = db.collection('users').doc(currentUid);
-        const userSnap = await safeGet(userRef);
-        const userData = (userSnap && typeof userSnap.data === 'function') ? userSnap.data() || {} : {};
+        const userRef = db ? db.collection('users').doc(currentUid) : null;
         
-        const catalog = { 'theme_neon': 150, 'theme_sunset': 150, 'avatar_crown': 200, 'avatar_dragon': 300, 'title_master': 250 };
-        const price = catalog[itemId] || 100;
+        const catalogPrices = {
+          'theme_cyber': 200,
+          'theme_matrix': 200,
+          'theme_solo': 300,
+          'theme_neon': 150,
+          'theme_sunset': 150,
+          'theme_light': 50,
+          'color_gold': 400,
+          'color_rainbow': 500,
+          'color_fire': 300,
+          'frame_animated': 150,
+          'frame_diamond': 350,
+          'badge_vip': 250,
+          'avatar_dragon': 300,
+          'title_master': 250,
+          'card_premium': 500
+        };
+        const price = catalogPrices[itemId] || 100;
+
+        let userData = {};
+        if (db && userRef) {
+          const userSnap = await safeGet(userRef);
+          userData = (userSnap && typeof userSnap.data === 'function') ? userSnap.data() || {} : {};
+        } else {
+          try {
+            userData = JSON.parse(localStorage.getItem('homeroom_cached_user') || '{}');
+          } catch(e) {}
+        }
 
         if ((userData.coins || 0) < price) {
           return { success: false, message: 'Insufficient ClassCoins for this item' };
         }
 
-        const items = Array.isArray(userData.purchased_items) ? userData.purchased_items : [];
-        if (!items.includes(itemId)) items.push(itemId);
+        let items = [];
+        if (Array.isArray(userData.purchased_items)) {
+          items = [...userData.purchased_items];
+        } else if (typeof userData.purchased_items === 'string') {
+          try { items = JSON.parse(userData.purchased_items || '[]'); } catch(e) { items = []; }
+        }
 
-        await userRef.set({
-          coins: firebase.firestore.FieldValue.increment(-price),
-          coins_spent: firebase.firestore.FieldValue.increment(price),
-          purchased_items: items
-        }, { merge: true });
+        if (!items.includes(itemId)) items.push(itemId);
+        userData.coins = (userData.coins || 0) - price;
+        userData.coins_spent = (userData.coins_spent || 0) + price;
+        userData.purchased_items = items;
+
+        if (db && userRef && typeof firebase !== 'undefined' && firebase.firestore) {
+          try {
+            await userRef.set({
+              coins: firebase.firestore.FieldValue.increment(-price),
+              coins_spent: firebase.firestore.FieldValue.increment(price),
+              purchased_items: items
+            }, { merge: true });
+          } catch(err) {
+            console.warn('Firestore update failed, falling back to set:', err);
+            await userRef.set(userData, { merge: true }).catch(() => {});
+          }
+        }
+        
+        try { localStorage.setItem('homeroom_cached_user', JSON.stringify(userData)); } catch(e) {}
 
         return { success: true, message: 'Item purchased successfully!' };
       }

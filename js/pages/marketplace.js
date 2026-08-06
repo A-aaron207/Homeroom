@@ -23,6 +23,7 @@ Homeroom.pages.marketplace = {
                 <button class="cat-chip" data-cat="username_color" style="padding: 0.5rem 1.5rem; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; cursor: pointer;">Username Colors</button>
                 <button class="cat-chip" data-cat="profile_frame" style="padding: 0.5rem 1.5rem; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; cursor: pointer;">Frames</button>
                 <button class="cat-chip" data-cat="badge" style="padding: 0.5rem 1.5rem; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; cursor: pointer;">Badges</button>
+                <button class="cat-chip" data-cat="profile_card" style="padding: 0.5rem 1.5rem; border-radius: 2rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white; cursor: pointer;">Profile Cards</button>
             </div>
         </div>
 
@@ -60,33 +61,53 @@ Homeroom.pages.marketplace = {
   async loadShop() {
       try {
           const [userRes, shopRes] = await Promise.all([
-              Homeroom.API.get('/auth/me'),
-              Homeroom.API.get('/marketplace')
+              Homeroom.API.get('/auth/me').catch(() => null),
+              Homeroom.API.get('/marketplace').catch(() => null)
           ]);
           
-          if(userRes.success) {
-              this.userCoins = userRes.data.user.coins;
-              this.userPurchases = Array.isArray(userRes.data.user.purchased_items) ? userRes.data.user.purchased_items : (() => { try { return JSON.parse(userRes.data.user.purchased_items || '[]'); } catch(e) { return []; } })();
-              document.getElementById('shop-balance').innerText = this.userCoins;
+          if (userRes && userRes.success && userRes.data) {
+              const u = userRes.data.user || userRes.data;
+              this.userCoins = typeof u.coins === 'number' ? u.coins : (u.coins || 0);
+              if (Array.isArray(u.purchased_items)) {
+                  this.userPurchases = u.purchased_items;
+              } else if (typeof u.purchased_items === 'string') {
+                  try { this.userPurchases = JSON.parse(u.purchased_items || '[]'); } catch(e) { this.userPurchases = []; }
+              } else {
+                  this.userPurchases = [];
+              }
+              const balanceEl = document.getElementById('shop-balance');
+              if (balanceEl) balanceEl.innerText = this.userCoins;
+          } else {
+              this.userCoins = 0;
+              this.userPurchases = [];
+              const balanceEl = document.getElementById('shop-balance');
+              if (balanceEl) balanceEl.innerText = '0';
           }
           
-          if(shopRes.success) {
+          if (shopRes && shopRes.success && Array.isArray(shopRes.data)) {
               this.items = shopRes.data;
               this.renderItems();
+          } else {
+              const content = document.getElementById('shop-content');
+              if (content) content.innerHTML = '<div class="error-state" style="text-align: center; color: var(--text-muted); padding: 3rem;">Failed to load marketplace items.</div>';
           }
       } catch(e) {
-          document.getElementById('shop-content').innerHTML = '<div class="error-state">Failed to load marketplace.</div>';
+          console.error('Error loading marketplace:', e);
+          const content = document.getElementById('shop-content');
+          if (content) content.innerHTML = '<div class="error-state" style="text-align: center; color: var(--text-muted); padding: 3rem;">Failed to load marketplace.</div>';
       }
   },
   
   renderItems() {
       const content = document.getElementById('shop-content');
+      if (!content) return;
+
       let filtered = this.items || [];
-      if(this.currentCat !== 'all') {
-          filtered = filtered.filter(i => i.category === this.currentCat);
+      if (this.currentCat !== 'all') {
+          filtered = filtered.filter(i => (i.category || i.type || '') === this.currentCat);
       }
       
-      if(filtered.length === 0) {
+      if (filtered.length === 0) {
           content.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 3rem;">No items found in this category.</div>';
           return;
       }
@@ -97,30 +118,39 @@ Homeroom.pages.marketplace = {
               case 'username_color': return '#ec4899';
               case 'profile_frame': return '#3b82f6';
               case 'badge': return '#f59e0b';
+              case 'profile_card': return '#10b981';
+              case 'avatar': case 'title': return '#3b82f6';
               default: return 'var(--accent-color)';
           }
       };
       
+      const userPurchases = Array.isArray(this.userPurchases) ? this.userPurchases : [];
+      const userCoins = typeof this.userCoins === 'number' ? this.userCoins : 0;
+      
       content.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem;">
             ${filtered.map(item => {
-                const isOwned = this.userPurchases.includes(item.id);
-                const canAfford = this.userCoins >= item.price;
-                const catColor = getCatColor(item.category);
+                const category = item.category || item.type || 'item';
+                const isOwned = userPurchases.includes(item.id);
+                const canAfford = userCoins >= item.price;
+                const catColor = getCatColor(category);
+                const itemDesc = item.description || item.desc || '';
+                const itemName = item.name || 'Item';
+                const safeName = itemName.replace(/'/g, "\\'");
                 
                 return `
                     <div class="glass-card shop-item ${isOwned ? 'owned' : ''}" style="padding: 1.5rem; background: rgba(0,0,0,0.2);">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
                             <div style="width: 60px; height: 60px; border-radius: 1rem; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; border: 1px solid rgba(255,255,255,0.1);">
-                                ${item.icon}
+                                ${item.icon || '🎁'}
                             </div>
                             <span style="background: rgba(255,255,255,0.1); color: ${catColor}; padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; border: 1px solid ${catColor}; opacity: 0.8;">
-                                ${item.category.replace('_', ' ')}
+                                ${category.replace('_', ' ')}
                             </span>
                         </div>
                         
-                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-color);">${item.name}</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; flex: 1; line-height: 1.4;">${item.description}</p>
+                        <h3 style="margin: 0 0 0.5rem 0; font-size: 1.25rem; color: var(--text-color);">${itemName}</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; flex: 1; line-height: 1.4;">${itemDesc}</p>
                         
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-top: auto;">
                             <div style="font-size: 1.25rem; font-weight: bold; color: #ffb703; display: flex; align-items: center; gap: 0.25rem;">
@@ -130,7 +160,7 @@ Homeroom.pages.marketplace = {
                             ${isOwned ? `
                                 <button class="btn" style="padding: 0.6rem 1.25rem; border-radius: 2rem; background: rgba(255,255,255,0.08); color: var(--text-muted); font-size: 0.85rem; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed;" disabled>✓ Owned</button>
                             ` : `
-                                <button class="btn btn-premium" style="padding: 0.6rem 1.25rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; ${!canAfford ? 'opacity: 0.4; cursor: not-allowed; filter: grayscale(1);' : ''}" onclick="Homeroom.pages.marketplace.purchase('${item.id}', '${item.name}', ${item.price})" ${!canAfford ? 'disabled' : ''}>
+                                <button class="btn btn-premium" style="padding: 0.6rem 1.25rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; ${!canAfford ? 'opacity: 0.4; cursor: not-allowed; filter: grayscale(1);' : ''}" onclick="Homeroom.pages.marketplace.purchase('${item.id}', '${safeName}', ${item.price})" ${!canAfford ? 'disabled' : ''}>
                                     🛒 Purchase
                                 </button>
                             `}
@@ -148,7 +178,7 @@ Homeroom.pages.marketplace = {
             <div style="font-size: 3rem; margin-bottom: 1rem;">🛒</div>
             <p style="font-size: 1.1rem;">Are you sure you want to buy <strong>${name}</strong>?</p>
             <p style="font-size: 1.5rem; color: #ffb703; font-weight: bold; margin: 1rem 0;">Cost: ⭐ ${price} CC</p>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Your balance: ⭐ ${this.userCoins}</p>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Your balance: ⭐ ${this.userCoins || 0}</p>
         </div>
       `, `
         <div style="display: flex; gap: 1rem; width: 100%;">
@@ -161,15 +191,15 @@ Homeroom.pages.marketplace = {
   async executePurchase(id) {
       try {
           const res = await Homeroom.API.post(`/marketplace/purchase/${id}`);
-          if(res.success) {
+          if (res && res.success) {
               Homeroom.toast('Purchase successful! Item added to inventory.', 'success');
               Homeroom.modal.close();
               if (window.App && window.App.refreshUser) {
-                  window.App.refreshUser();
+                  await window.App.refreshUser();
               }
-              this.loadShop();
+              await this.loadShop();
           } else {
-              Homeroom.toast(res.message || 'Purchase failed', 'error');
+              Homeroom.toast((res && res.message) || 'Purchase failed', 'error');
               Homeroom.modal.close();
           }
       } catch(e) {

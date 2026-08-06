@@ -306,7 +306,7 @@ Homeroom.pages.qna = {
             btn.addEventListener('click', async function() {
                 const id = this.dataset.id;
                 try {
-                    await Homeroom.API.post(`/answers/${id}/upvote`);
+                    await Homeroom.API.post(`/questions/${q.id}/answers/${id}/upvote`);
                     Homeroom.pages.qna.openQuestion(q.id);
                 } catch(e) {}
             });
@@ -317,7 +317,7 @@ Homeroom.pages.qna = {
             btn.addEventListener('click', async function() {
                 const id = this.dataset.id;
                 try {
-                    await Homeroom.API.post(`/answers/${id}/best`);
+                    await Homeroom.API.post(`/questions/${q.id}/answers/${id}/best`);
                     Homeroom.toast('Accepted answer! +15 CC awarded', 'success');
                     Homeroom.pages.qna.openQuestion(q.id);
                 } catch(e) {}
@@ -333,7 +333,7 @@ Homeroom.pages.qna = {
             btn.innerText = 'Posting...';
             
             try {
-                const res = await Homeroom.API.post(`/questions/${q.id}/answer`, { content });
+                const res = await Homeroom.API.post(`/questions/${q.id}/answers`, { content });
                 if(res.success) {
                     Homeroom.toast('Answer posted! +3 CC', 'success');
                     this.openQuestion(q.id);

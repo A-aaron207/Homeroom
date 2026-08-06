@@ -19,8 +19,9 @@ def get_items():
     for i in items:
         i_dict = dict(i)
         i_dict['purchased'] = i['id'] in purchased_ids
+        i_dict['type'] = i_dict.get('category', '')
         try:
-            i_dict['item_data'] = json.loads(i_dict['item_data'])
+            i_dict['item_data'] = json.loads(i_dict.get('item_data', '{}'))
         except:
             i_dict['item_data'] = {}
         result.append(i_dict)

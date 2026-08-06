@@ -14,11 +14,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return signedIn() &&
-        (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
-          request.auth.token.email == 'aaronsaha.22@gmail.com'
-        );
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // ---------- users/{uid} ----------
@@ -50,59 +47,51 @@ service cloud.firestore {
     // ---------- notes/{noteId} ----------
     match /notes/{noteId} {
       allow read: if signedIn();
-      allow create: if signedIn() && (
-        request.resource.data.author_id == request.auth.uid ||
-        request.resource.data.user_id == request.auth.uid
-      );
-      allow update: if signedIn(); // Allow ratings, comments count, and downloads
-      allow delete: if signedIn() && (
-        resource.data.author_id == request.auth.uid ||
-        resource.data.user_id == request.auth.uid ||
-        isAdmin()
-      );
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      // Allow any signed-in user to update (needed for ratings by non-authors)
+      allow update: if signedIn();
+      allow delete: if signedIn() &&
+        (resource.data.user_id == request.auth.uid || isAdmin());
 
       // notes/{noteId}/comments/{commentId}
       match /comments/{commentId} {
-        allow read, create: if signedIn();
-        allow update, delete: if signedIn() && (
-          resource.data.user_id == request.auth.uid ||
-          resource.data.author_id == request.auth.uid ||
-          isAdmin()
-        );
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+        allow update, delete: if signedIn() &&
+          (resource.data.user_id == request.auth.uid || isAdmin());
       }
     }
 
     // ---------- questions/{qId} (Q&A) ----------
     match /questions/{qId} {
       allow read: if signedIn();
-      allow create: if signedIn() && (
-        request.resource.data.author_id == request.auth.uid ||
-        request.resource.data.user_id == request.auth.uid
-      );
-      // Updates also happen to bump answer counts or upvotes on someone else's question
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      // Updates also happen to bump answer counts on someone else's question,
+      // so allow any signed-in user to update, but never delete unless owner/admin.
       allow update: if signedIn();
-      allow delete: if signedIn() && (
-        resource.data.author_id == request.auth.uid ||
-        resource.data.user_id == request.auth.uid ||
-        isAdmin()
-      );
+      allow delete: if signedIn() &&
+        (resource.data.user_id == request.auth.uid || isAdmin());
 
       // questions/{qId}/answers/{aId}
       match /answers/{aId} {
-        allow read, create: if signedIn();
-        allow update, delete: if signedIn() && (
-          resource.data.author_id == request.auth.uid ||
-          resource.data.user_id == request.auth.uid ||
-          isAdmin()
-        );
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+        // Allow any signed-in user to update (needed for question owner to mark best answer
+        // and for upvote increment by anyone)
+        allow update: if signedIn();
+        allow delete: if signedIn() &&
+          (resource.data.user_id == request.auth.uid || isAdmin());
       }
     }
 
     // ---------- tasks/{taskId} ----------
     match /tasks/{taskId} {
       allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if signedIn();
+      allow create: if signedIn() && request.resource.data.user_id == request.auth.uid;
+      allow update: if signedIn() &&
+        (resource.data.user_id == request.auth.uid || isAdmin());
+      allow delete: if signedIn() &&
+        (resource.data.user_id == request.auth.uid || isAdmin());
 
       // tasks/{taskId}/submissions/{uid} — the submission doc id IS the submitter's uid
       match /submissions/{uid} {
@@ -114,6 +103,9 @@ service cloud.firestore {
 
     // ---------- conversations/{convId} ----------
     match /conversations/{convId} {
+      // Only participants can read; anyone signed-in can create (they add
+      // themselves as a participant), only participants can update (e.g.
+      // last_message preview).
       allow read: if signedIn() &&
         request.auth.uid in resource.data.participant_ids;
       allow create: if signedIn() &&
@@ -127,7 +119,8 @@ service cloud.firestore {
         allow read: if signedIn() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids;
         allow create: if signedIn() &&
-          (request.resource.data.sender_id == request.auth.uid || request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids);
+          request.resource.data.sender_id == request.auth.uid &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(convId)).data.participant_ids;
         allow update, delete: if signedIn() &&
           (resource.data.sender_id == request.auth.uid || isAdmin());
       }
