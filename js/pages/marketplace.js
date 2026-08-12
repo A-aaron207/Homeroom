@@ -137,9 +137,18 @@ Homeroom.pages.marketplace = {
                 const itemDesc = item.description || item.desc || '';
                 const itemName = item.name || 'Item';
                 const safeName = itemName.replace(/'/g, "\\'");
-                
+
+                // Determine if this item is currently active
+                const u = Homeroom.store.currentUser || {};
+                let isActive = false;
+                if (category === 'theme') isActive = (u.theme === item.id);
+                else if (category === 'username_color') isActive = (u.username_color === item.id);
+                else if (category === 'profile_frame') isActive = (u.active_frame === item.id);
+                else if (category === 'badge') isActive = (u.active_badge === item.id);
+                else if (category === 'profile_card') isActive = (u.active_card === item.id);
+
                 return `
-                    <div class="glass-card shop-item ${isOwned ? 'owned' : ''}" style="padding: 1.5rem; background: rgba(0,0,0,0.2);">
+                    <div class="glass-card shop-item ${isOwned ? 'owned' : ''}" style="padding: 1.5rem; background: rgba(0,0,0,0.2); display:flex;flex-direction:column;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
                             <div style="width: 60px; height: 60px; border-radius: 1rem; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; border: 1px solid rgba(255,255,255,0.1);">
                                 ${item.icon || '🎁'}
@@ -158,7 +167,9 @@ Homeroom.pages.marketplace = {
                             </div>
                             
                             ${isOwned ? `
-                                <button class="btn" style="padding: 0.6rem 1.25rem; border-radius: 2rem; background: rgba(255,255,255,0.08); color: var(--text-muted); font-size: 0.85rem; font-weight: bold; border: 1px solid rgba(255,255,255,0.1); cursor: not-allowed;" disabled>✓ Owned</button>
+                                <button class="btn btn-premium" style="padding: 0.6rem 1.25rem; border-radius: 2rem; font-size: 0.85rem; font-weight: bold; background: ${ isActive ? '#22c55e' : 'var(--accent,#6366f1)' };" onclick="Homeroom.pages.marketplace.applyItem('${item.id}', '${category}')">
+                                    ${ isActive ? '✓ Applied' : '▶ Apply' }
+                                </button>
                             ` : `
                                 <button class="btn btn-premium" style="padding: 0.6rem 1.25rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; ${!canAfford ? 'opacity: 0.4; cursor: not-allowed; filter: grayscale(1);' : ''}" onclick="Homeroom.pages.marketplace.purchase('${item.id}', '${safeName}', ${item.price})" ${!canAfford ? 'disabled' : ''}>
                                     🛒 Purchase
@@ -205,6 +216,43 @@ Homeroom.pages.marketplace = {
       } catch(e) {
           Homeroom.toast('Network error', 'error');
       }
+  },
+
+  async applyItem(id, category) {
+    // Build the Firestore field to update based on item type
+    const fieldMap = {
+      'theme':         'theme',
+      'username_color':'username_color',
+      'profile_frame': 'active_frame',
+      'badge':         'active_badge',
+      'profile_card':  'active_card',
+    };
+    const field = fieldMap[category];
+    if (!field) { Homeroom.toast('Unknown item type', 'error'); return; }
+
+    try {
+      const res = await Homeroom.API.put('/users/me', { [field]: id });
+      if (res && res.success) {
+        // Update local store so the button re-renders as "Applied"
+        if (Homeroom.store.currentUser) Homeroom.store.currentUser[field] = id;
+        try { 
+          const cached = JSON.parse(localStorage.getItem('homeroom_cached_user') || '{}');
+          cached[field] = id;
+          localStorage.setItem('homeroom_cached_user', JSON.stringify(cached));
+        } catch(e) {}
+
+        // Apply theme immediately on the page if it's a theme
+        if (field === 'theme') document.body.dataset.theme = id;
+
+        Homeroom.toast(`✅ ${category.replace('_',' ')} applied!`, 'success');
+        // Re-render items so button turns green
+        this.renderItems();
+      } else {
+        Homeroom.toast(res.message || 'Failed to apply item', 'error');
+      }
+    } catch(e) {
+      Homeroom.toast('Error applying item', 'error');
+    }
   },
 
   destroy() {}
