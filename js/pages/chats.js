@@ -181,7 +181,7 @@ Homeroom.pages.chats = {
     this._pollInterval = setInterval(() => {
       if (this.currentChatId) this.loadMessages(this.currentChatId, true);
       this.loadConversations(true);
-    }, 3000);
+    }, 8000); // 8s keeps UX snappy while cutting Firestore reads by ~60%
   },
 
   async loadConversations(silent = false) {
@@ -568,9 +568,31 @@ Homeroom.pages.chats = {
 
   async _startChat(userId) {
     const currentUser = Homeroom.store.currentUser || Homeroom.auth?.user;
+
+    // Check if a DM with this user already exists to avoid duplicates
+    const existing = this.conversations.find(c =>
+      c.type === 'dm' &&
+      Array.isArray(c.participant_ids) &&
+      c.participant_ids.includes(currentUser.id) &&
+      c.participant_ids.includes(userId)
+    );
+    if (existing) {
+      Homeroom.modal.close();
+      await this.openChat(existing.id);
+      return;
+    }
+
+    // Look up the other user's display name to set as DM conversation name
+    const allUsersRes = await Homeroom.API.get('/users');
+    const allUsers = allUsersRes.success ? (allUsersRes.data || []) : [];
+    const otherUser = allUsers.find(u => u.id === userId);
+    const dmName = otherUser ? (otherUser.display_name || otherUser.username || 'Chat') : 'Chat';
+
+    // API handler reads participant_ids (not participants)
     const res = await Homeroom.API.post('/conversations', {
       type: 'dm',
-      participants: [currentUser.id, userId]
+      name: dmName,
+      participant_ids: [userId]   // currentUid is prepended server-side
     });
     if (res.success) {
       Homeroom.modal.close();

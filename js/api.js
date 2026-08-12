@@ -373,12 +373,42 @@ Homeroom.API = {
       }
 
       if (path === '/conversations' && method === 'POST') {
+        if (!currentUid) return { success: false, message: 'Not logged in' };
+
+        // Support both `participant_ids` (preferred) and legacy `participants` arrays
+        const extraIds = body.participant_ids || body.participants || [];
+        // Build deduplicated participant list — always include currentUid
+        const participantSet = new Set([currentUid, ...extraIds.map(String)]);
+        const participantIds = [...participantSet];
+
+        // For DMs: check if a conversation between these two already exists
+        if (body.type === 'dm' && participantIds.length === 2) {
+          try {
+            const existingSnap = await safeGet(
+              db.collection('conversations')
+                .where('type', '==', 'dm')
+                .where('participant_ids', 'array-contains', currentUid)
+            );
+            const existing = existingSnap.docs
+              ? existingSnap.docs.find(d => {
+                  const ids = d.data().participant_ids || [];
+                  return participantIds.every(id => ids.includes(id)) && ids.length === 2;
+                })
+              : null;
+            if (existing) {
+              return { success: true, data: { id: existing.id, ...existing.data() } };
+            }
+          } catch (e) {
+            // Non-fatal — just create a new one if lookup fails
+          }
+        }
+
         const newRef = db.collection('conversations').doc();
         const convData = {
           id: newRef.id,
-          name: body.name || 'Chat',
+          name: body.name || (body.type === 'dm' ? 'Direct Message' : 'Group Chat'),
           type: body.type || 'dm',
-          participant_ids: [currentUid, ...(body.participant_ids || [])],
+          participant_ids: participantIds,
           created_at: new Date().toISOString(),
           last_message_content: '',
           last_message_time: new Date().toISOString()
@@ -496,12 +526,16 @@ Homeroom.API = {
           avatar_emoji: String(rawAuthor.avatar_emoji || '🎓')
         };
 
+        // Trim long content to avoid bloating Firestore documents (1 GB Spark limit).
+        // Full file content is accessed via URL, not stored inline.
+        const trimmedContent = String(payload.content || payload.description || '').substring(0, 1500);
+
         const noteData = {
           id: docRef.id,
           title: String(payload.title || 'Untitled Note'),
           subject: String(payload.subject || 'General'),
-          description: String(payload.description || ''),
-          content: String(payload.content || payload.description || ''),
+          description: String(payload.description || '').substring(0, 300),
+          content: trimmedContent,
           file_url: String(fileUrl || ''),
           file_name: payload.file instanceof File ? payload.file.name : String(payload.file_name || 'Note Document'),
           tags: Array.isArray(payload.tags) ? payload.tags : [],
@@ -734,11 +768,14 @@ Homeroom.API = {
           avatar_emoji: String(rawAuthor.avatar_emoji || '🎓')
         };
 
+        // Trim long question content to limit Firestore document size
+        const trimmedContent = String(payload.content || payload.title || '').substring(0, 1500);
+
         const qData = {
           id: docRef.id,
           title: String(payload.title || 'Untitled Question'),
           subject: String(payload.subject || 'General'),
-          content: String(payload.content || payload.title || ''),
+          content: trimmedContent,
           tags: Array.isArray(payload.tags) ? payload.tags : [],
           user_id: validUid,
           author_id: validUid,

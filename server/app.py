@@ -29,6 +29,17 @@ def create_app():
         UPLOAD_FOLDER=os.path.join(base_dir, 'uploads'),
         MAX_FILE_SIZE=10 * 1024 * 1024,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+        # Cloudinary (primary — 25 GB free, NO card needed)
+        CLOUDINARY_CLOUD_NAME=os.environ.get('CLOUDINARY_CLOUD_NAME', ''),
+        CLOUDINARY_API_KEY=os.environ.get('CLOUDINARY_API_KEY', ''),
+        CLOUDINARY_API_SECRET=os.environ.get('CLOUDINARY_API_SECRET', ''),
+        # Backblaze B2 (secondary — 10 GB free, needs $1 verify)
+        B2_KEY_ID=os.environ.get('B2_KEY_ID', ''),
+        B2_APPLICATION_KEY=os.environ.get('B2_APPLICATION_KEY', ''),
+        B2_BUCKET_NAME=os.environ.get('B2_BUCKET_NAME', 'homeroom'),
+        B2_ENDPOINT=os.environ.get('B2_ENDPOINT', ''),
+        B2_PUBLIC_DOMAIN=os.environ.get('B2_PUBLIC_DOMAIN', ''),
+        # Cloudflare R2 (tertiary — 10 GB free, requires card on file)
         R2_ACCOUNT_ID=os.environ.get('R2_ACCOUNT_ID', ''),
         R2_ACCESS_KEY_ID=os.environ.get('R2_ACCESS_KEY_ID', ''),
         R2_SECRET_ACCESS_KEY=os.environ.get('R2_SECRET_ACCESS_KEY', ''),
