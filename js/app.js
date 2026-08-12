@@ -369,10 +369,16 @@ const App = {
         
         const sidebarUser = document.getElementById('sidebar-user');
         if (sidebarUser) {
+            const colorClass = {
+                'color_gold':    'username-color-gold',
+                'color_rainbow': 'username-color-rainbow',
+                'color_fire':    'username-color-fire'
+            }[u.username_color] || '';
+
             sidebarUser.innerHTML = `
                 <div class="avatar">${u.avatarEmoji || u.avatar_emoji || '🎓'}</div>
                 <div class="user-info">
-                    <div class="display-name ${u.username_color || ''}">${u.displayName || u.display_name}</div>
+                    <div class="display-name ${colorClass}">${u.displayName || u.display_name}</div>
                     <div class="level">Lvl ${this.calculateLevel(u.xp)}</div>
                 </div>
             `;

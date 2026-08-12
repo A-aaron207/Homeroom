@@ -197,6 +197,63 @@
   --shadow-glow: 0 0 15px var(--accent);
 }
 
+
+/* ============================================================
+   MARKETPLACE COSMETICS
+   ============================================================ */
+
+/* Username Colors */
+.username-color-gold {
+  background: linear-gradient(90deg, #f59e0b, #fcd34d, #f59e0b) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  font-weight: 800 !important;
+  filter: drop-shadow(0 0 6px rgba(245,158,11,0.5));
+}
+.username-color-rainbow {
+  background: linear-gradient(90deg,#ef4444,#f97316,#eab308,#22c55e,#3b82f6,#8b5cf6,#ec4899,#ef4444) !important;
+  background-size: 300% 100% !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  font-weight: 800 !important;
+  animation: rainbow-shift 4s linear infinite;
+}
+@keyframes rainbow-shift { 0%{background-position:0% 50%} 100%{background-position:300% 50%} }
+.username-color-fire {
+  background: linear-gradient(90deg,#dc2626,#f97316,#fbbf24) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+  font-weight: 800 !important;
+  filter: drop-shadow(0 0 6px rgba(239,68,68,0.6));
+}
+
+/* Avatar Frames */
+.frame-animated {
+  box-shadow: 0 0 0 4px #6366f1, 0 0 22px 8px rgba(99,102,241,0.55) !important;
+  animation: frame-pulse 2s ease-in-out infinite !important;
+}
+@keyframes frame-pulse {
+  0%,100% { box-shadow: 0 0 0 4px #6366f1, 0 0 20px 6px rgba(99,102,241,0.4); }
+  50%      { box-shadow: 0 0 0 4px #8b5cf6, 0 0 34px 12px rgba(139,92,246,0.7); }
+}
+.frame-diamond {
+  box-shadow: 0 0 0 4px #93c5fd, 0 0 20px 6px rgba(147,197,253,0.5) !important;
+  animation: diamond-shimmer 3s ease-in-out infinite !important;
+}
+@keyframes diamond-shimmer {
+  0%,100% { box-shadow: 0 0 0 4px #93c5fd, 0 0 16px 4px rgba(147,197,253,0.4); }
+  50%      { box-shadow: 0 0 0 4px #e0f2fe, 0 0 30px 10px rgba(224,242,254,0.7); }
+}
+
+/* Premium Profile Card */
+.card-premium-bg {
+  background: linear-gradient(135deg,rgba(99,102,241,.2),rgba(139,92,246,.2),rgba(236,72,153,.15)) !important;
+  border: 1px solid rgba(139,92,246,0.4) !important;
+}
+
 /* Reset & Base */
 *, *::before, *::after {
   box-sizing: border-box;

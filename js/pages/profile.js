@@ -166,19 +166,50 @@ Homeroom.pages.profile = {
 
       // Render Hero
       const heroEl = document.getElementById('profile-hero-content');
+      const heroBg  = document.getElementById('profile-hero-bg');
+
+      // Map item IDs to CSS classes
+      const usernameColorClass = {
+        'color_gold':    'username-color-gold',
+        'color_rainbow': 'username-color-rainbow',
+        'color_fire':    'username-color-fire'
+      }[u.username_color] || '';
+
+      const frameClass = {
+        'frame_animated': 'frame-animated',
+        'frame_diamond':  'frame-diamond'
+      }[u.active_frame] || '';
+
+      const cardClass = u.active_card === 'card_premium' ? 'card-premium-bg' : '';
+
+      const badgeEmoji = {
+        'badge_vip':    '👑',
+        'avatar_dragon':'🐉',
+        'title_master': '🏆'
+      }[u.active_badge] || '';
+
+      // Apply premium card class to hero container
+      const heroContainer = document.querySelector('.hero-section');
+      if (heroContainer && cardClass) heroContainer.classList.add(cardClass);
+
       if (heroEl) {
           heroEl.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2;">
-                <div style="width: 120px; height: 120px; border-radius: 50%; background: ${u.avatar_bg || u.avatarBg || 'var(--accent-color)'}; font-size: 4rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.3); ${u.profile_frame ? 'border: 5px solid var(--accent-color);' : ''}">
-                    ${u.avatar_emoji || u.avatarEmoji || '🎓'}
+                <div style="position:relative;margin-bottom:1rem;">
+                  <div style="width: 120px; height: 120px; border-radius: 50%; background: ${u.avatar_bg || u.avatarBg || 'var(--accent)'}; font-size: 4rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);" class="${frameClass}">
+                      ${u.avatar_emoji || u.avatarEmoji || '🎓'}
+                  </div>
+                  ${badgeEmoji ? `<div style="position:absolute;bottom:-4px;right:-4px;font-size:1.8rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));">${badgeEmoji}</div>` : ''}
                 </div>
                 
-                <h2 style="margin: 0 0 0.5rem 0; font-size: 2.5rem; color: ${u.username_color || 'var(--text-color)'}; font-weight: 800;">${displayName}</h2>
+                <h2 style="margin: 0 0 0.5rem 0; font-size: 2.5rem; font-weight: 800;" class="${usernameColorClass}">${displayName}</h2>
                 <div style="font-size: 1.1rem; color: var(--text-muted); margin-bottom: 1.5rem;">@${username} • Joined ${joinDateStr}</div>
                 
-                <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
-                    <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: var(--accent-color); padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(99,102,241,0.3);">Level ${level}</span>
-                    ${u.role === 'admin' ? '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(239,68,68,0.3);">Admin</span>' : ''}
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem; flex-wrap:wrap; justify-content:center;">
+                    <span class="badge" style="background: rgba(99, 102, 241, 0.2); color: var(--accent); padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(99,102,241,0.3);">Level ${level}</span>
+                    ${u.role === 'admin' ? '<span class="badge" style="background: rgba(239,68,68,0.2); color: #ef4444; padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(239,68,68,0.3);">Admin</span>' : ''}
+                    ${u.is_developer ? '<span class="badge" style="background: rgba(99,102,241,0.2); color: #818cf8; padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(129,140,248,0.3);">👨‍💻 Developer</span>' : ''}
+                    ${u.is_premium ? '<span class="badge" style="background: rgba(245,158,11,0.2); color: #fbbf24; padding: 0.4rem 1rem; border-radius: 2rem; font-size: 0.9rem; font-weight: bold; border: 1px solid rgba(245,158,11,0.3);">⭐ Premium</span>' : ''}
                 </div>
                 
                 <p style="font-size: 1.1rem; color: var(--text-color); max-width: 600px; line-height: 1.6; margin: 0 auto;">${u.bio || 'This student is focused on studying.'}</p>
@@ -186,11 +217,11 @@ Homeroom.pages.profile = {
             
             <div style="width: 100%; max-width: 400px; margin: 2rem auto 0 auto; text-align: left;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: bold;">
-                    <span style="color: var(--accent-color);">XP Progress</span>
+                    <span style="color: var(--accent);">XP Progress</span>
                     <span style="color: var(--text-muted);">${xp % 1000} / 1000</span>
                 </div>
                 <div style="height: 12px; background: rgba(0,0,0,0.5); border-radius: 6px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);">
-                    <div style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, var(--accent-color), #8b5cf6); border-radius: 6px;"></div>
+                    <div style="height: 100%; width: ${progress}%; background: linear-gradient(90deg, var(--accent), #8b5cf6); border-radius: 6px;"></div>
                 </div>
             </div>
           `;
