@@ -532,28 +532,44 @@ Homeroom.pages.chats = {
   },
 
   async openNewChatModal() {
+    Homeroom.modal.open('New Message', '<div style="text-align:center;padding:2rem;"><div style="font-size:2rem;">⏳</div><p>Loading classmates...</p></div>');
+
     const usersRes = await Homeroom.API.get('/users');
     if (!usersRes.success) { Homeroom.toast('Failed to load users', 'error'); return; }
 
     const currentUser = Homeroom.store.currentUser || Homeroom.auth?.user;
-    const users = (usersRes.data || []).filter(u => u.id !== currentUser?.id);
+    // Cache users for _startChat to avoid a second API call
+    this._userCache = usersRes.data || [];
+    const users = this._userCache.filter(u => u.id !== currentUser?.id);
+
+    if (users.length === 0) {
+      Homeroom.modal.open('New Message', '<div style="text-align:center;padding:2rem;color:var(--text-muted,#718096);"><div style="font-size:2.5rem;">👥</div><p>No other classmates found yet.</p></div>');
+      return;
+    }
 
     Homeroom.modal.open('New Message', `
       <div>
-        <input type="text" id="new-chat-search" placeholder="Search classmates..." style="width:100%;padding:0.8rem 1rem;border-radius:0.6rem;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:white;margin-bottom:1rem;outline:none;">
-        <div id="user-pick-list" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem;">
-          ${users.map(u => `
-            <div class="user-pick-item" data-name="${u.display_name.toLowerCase()} ${u.username.toLowerCase()}"
-                 style="display:flex;align-items:center;gap:0.75rem;padding:0.8rem;border-radius:0.6rem;cursor:pointer;border:1px solid rgba(255,255,255,0.07);transition:background 0.15s;"
-                 onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background=''"
-                 onclick="Homeroom.pages.chats._startChat('${u.id}')">
-              <div style="font-size:1.5rem;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;">${u.avatar_emoji || '🎓'}</div>
-              <div>
-                <div style="font-weight:600;font-size:0.9rem;">${u.display_name}</div>
-                <div style="font-size:0.78rem;color:var(--text-muted,#718096);">@${u.username}</div>
+        <input type="text" id="new-chat-search" placeholder="Search classmates..." style="width:100%;padding:0.8rem 1rem;border-radius:0.6rem;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:white;margin-bottom:1rem;outline:none;box-sizing:border-box;">
+        <div id="user-pick-list" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem;">
+          ${users.map(u => {
+            // Guard against null/undefined fields that would crash the template
+            const displayName = u.display_name || u.username || u.email?.split('@')[0] || 'User';
+            const username   = u.username || u.email?.split('@')[0] || u.id?.substring(0, 8) || 'user';
+            const emoji      = u.avatar_emoji || '🎓';
+            const searchKey  = `${displayName} ${username}`.toLowerCase();
+            return `
+              <div class="user-pick-item" data-name="${searchKey}"
+                   style="display:flex;align-items:center;gap:0.75rem;padding:0.8rem;border-radius:0.6rem;cursor:pointer;border:1px solid rgba(255,255,255,0.07);transition:background 0.15s;"
+                   onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background=''"
+                   onclick="Homeroom.pages.chats._startChat('${u.id}')">
+                <div style="font-size:1.5rem;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">${emoji}</div>
+                <div style="min-width:0;">
+                  <div style="font-weight:600;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${displayName}</div>
+                  <div style="font-size:0.78rem;color:var(--text-muted,#718096);">@${username}</div>
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
     `);
@@ -564,12 +580,14 @@ Homeroom.pages.chats = {
         el.style.display = el.dataset.name?.includes(q) ? '' : 'none';
       });
     });
+    // Auto-focus search
+    setTimeout(() => document.getElementById('new-chat-search')?.focus(), 100);
   },
 
   async _startChat(userId) {
     const currentUser = Homeroom.store.currentUser || Homeroom.auth?.user;
 
-    // Check if a DM with this user already exists to avoid duplicates
+    // Check if a DM with this user already exists — open it instead of creating duplicate
     const existing = this.conversations.find(c =>
       c.type === 'dm' &&
       Array.isArray(c.participant_ids) &&
@@ -582,22 +600,24 @@ Homeroom.pages.chats = {
       return;
     }
 
-    // Look up the other user's display name to set as DM conversation name
-    const allUsersRes = await Homeroom.API.get('/users');
-    const allUsers = allUsersRes.success ? (allUsersRes.data || []) : [];
-    const otherUser = allUsers.find(u => u.id === userId);
-    const dmName = otherUser ? (otherUser.display_name || otherUser.username || 'Chat') : 'Chat';
+    // Reuse cached users from openNewChatModal — no extra API call needed
+    const cachedUsers = this._userCache || [];
+    const otherUser = cachedUsers.find(u => u.id === userId);
+    const dmName = otherUser
+      ? (otherUser.display_name || otherUser.username || 'Chat')
+      : 'Chat';
 
-    // API handler reads participant_ids (not participants)
+    Homeroom.modal.close(); // Close modal immediately for snappier UX
+
     const res = await Homeroom.API.post('/conversations', {
       type: 'dm',
       name: dmName,
-      participant_ids: [userId]   // currentUid is prepended server-side
+      participant_ids: [userId]   // currentUid prepended server-side
     });
+
     if (res.success) {
-      Homeroom.modal.close();
       await this.loadConversations();
-      await this.openChat(res.data.id);
+      this.openChat(res.data.id);
     } else {
       Homeroom.toast(res.message || 'Failed to start chat', 'error');
     }
