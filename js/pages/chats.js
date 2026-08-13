@@ -7,6 +7,7 @@ Homeroom.pages.chats = {
   _pollInterval: null,
   _typingTimeout: null,
   _replyTo: null,
+  _lastMsgFingerprint: null,
 
   async render() {
     return `
@@ -258,6 +259,7 @@ Homeroom.pages.chats = {
   async openChat(id) {
     this.currentChatId = id;
     this._replyTo = null;
+    this._lastMsgFingerprint = null;
     const layout = document.getElementById('chat-layout');
     if (layout) {
       if (id) {
@@ -349,6 +351,7 @@ Homeroom.pages.chats = {
 
       try {
         await Homeroom.API.post(`/conversations/${id}/messages`, { content, replyTo });
+        this._lastMsgFingerprint = null; // force re-render after sending
         this.loadMessages(id, true);
       } catch (err) {
         Homeroom.toast('Failed to send message', 'error');
@@ -374,6 +377,12 @@ Homeroom.pages.chats = {
     }
     const messages = res.data || [];
     const currentUser = Homeroom.store.currentUser || Homeroom.auth?.user;
+
+    // Build a lightweight fingerprint: last msg id + count + last reaction snapshot
+    const fingerprint = messages.length + '|' + (messages[messages.length - 1]?.id || '') + '|' + (messages[messages.length - 1]?.created_at || '') + '|' + JSON.stringify(messages[messages.length - 1]?.reactions || {});
+    if (silent && fingerprint === this._lastMsgFingerprint) return; // nothing changed, skip re-render
+    this._lastMsgFingerprint = fingerprint;
+
     const wasScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 60;
 
     if (messages.length === 0) {

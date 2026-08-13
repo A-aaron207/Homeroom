@@ -14,7 +14,10 @@ def get_wallet():
     user = db.execute('SELECT coins FROM users WHERE id = ?', (g.user['id'],)).fetchone()
     
     # Transactions
-    transactions = db.execute('SELECT * FROM transactions WHERE user_id = ? ORDER BY created_at DESC', (g.user['id'],)).fetchall()
+    transactions = db.execute(
+        'SELECT id, user_id, type, amount, COALESCE(description, \'\') as description, COALESCE(category, \'\') as category, created_at FROM transactions WHERE user_id = ? ORDER BY created_at DESC',
+        (g.user['id'],)
+    ).fetchall()
     
     total_earned = sum(t['amount'] for t in transactions if t['type'] == 'earned')
     total_spent = sum(t['amount'] for t in transactions if t['type'] in ('spent', 'expense'))

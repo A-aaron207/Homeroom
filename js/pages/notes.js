@@ -211,7 +211,7 @@ Homeroom.pages.notes = {
                                 </div>
                                 <div style="display: flex; gap: 0.75rem; font-size: 0.85rem; color: var(--text-muted);">
                                     <span style="display: flex; align-items: center; gap: 0.25rem;">⭐ ${rating}</span>
-                                    <span style="display: flex; align-items: center; gap: 0.25rem;">⬇️ ${note.download_count}</span>
+                                    <span style="display: flex; align-items: center; gap: 0.25rem;">⬇️ ${note.download_count || 0}</span>
                                 </div>
                             </div>
                         </div>
@@ -267,7 +267,7 @@ Homeroom.pages.notes = {
                     <div style="font-size: 0.8rem; color: var(--text-muted);">${note.rating_count} reviews</div>
                 </div>
                 <div style="text-align: right;">
-                    <div style="font-size: 1.2rem; font-weight: bold; color: var(--text-color);">⬇️ ${note.download_count}</div>
+                    <div style="font-size: 1.2rem; font-weight: bold; color: var(--text-color);">⬇️ ${note.download_count || 0}</div>
                     <div style="font-size: 0.8rem; color: var(--text-muted);">Downloads</div>
                 </div>
             </div>
@@ -298,7 +298,7 @@ Homeroom.pages.notes = {
             </div>
 
         `, `
-            <a href="${note.file_url || '#'}" target="_blank" rel="noopener noreferrer" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; text-align: center; text-decoration: none; display: flex; justify-content: center; align-items: center; gap: 0.5rem; font-size: 1.1rem;" onclick="if(!('${note.file_url}')||'${note.file_url}'==='#'){event.preventDefault();Homeroom.toast('No file attached to this note.','info');return;}setTimeout(()=>Homeroom.pages.notes.loadNotes(), 1000)">
+            <a href="/api/notes/${note.id}/download" target="_blank" rel="noopener noreferrer" class="btn btn-premium" style="width: 100%; padding: 1rem; border-radius: 0.5rem; text-align: center; text-decoration: none; display: flex; justify-content: center; align-items: center; gap: 0.5rem; font-size: 1.1rem;" onclick="setTimeout(()=>Homeroom.pages.notes.loadNotes(), 1500)">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                 Download Note
             </a>

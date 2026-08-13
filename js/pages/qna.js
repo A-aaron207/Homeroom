@@ -179,10 +179,10 @@ Homeroom.pages.qna = {
                     return `
                         <div class="glass-card" style="padding: 1.5rem; display: flex; gap: 1.5rem; align-items: flex-start; cursor: pointer; transition: all 0.2s;" onclick="Homeroom.pages.qna.openQuestion('${q.id}')">
                             <div style="display: flex; flex-direction: column; align-items: center; min-width: 60px; background: rgba(0,0,0,0.2); padding: 1rem 0.5rem; border-radius: 0.5rem; border: 1px solid ${isSolved ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.05)'};">
-                                <span style="font-size: 1.5rem; color: var(--accent-color); font-weight: bold;">${q.upvotes}</span>
+                                <span style="font-size: 1.5rem; color: var(--accent-color); font-weight: bold;">${q.upvotes || 0}</span>
                                 <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">votes</span>
                                 <div style="margin: 0.5rem 0; width: 30px; height: 1px; background: rgba(255,255,255,0.1);"></div>
-                                <span style="font-size: 1.2rem; color: ${isSolved ? '#22c55e' : (q.answer_count > 0 ? '#3b82f6' : 'var(--text-muted)')}; font-weight: bold;">${q.answer_count}</span>
+                                <span style="font-size: 1.2rem; color: ${isSolved ? '#22c55e' : (q.answer_count > 0 ? '#3b82f6' : 'var(--text-muted)')}; font-weight: bold;">${q.answer_count || 0}</span>
                                 <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">answers</span>
                             </div>
                             
@@ -235,7 +235,7 @@ Homeroom.pages.qna = {
                     ${a.is_best ? '<div style="position: absolute; top: -10px; right: 20px; background: #22c55e; color: white; padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.8rem; font-weight: bold; box-shadow: 0 4px 10px rgba(34,197,94,0.3);">⭐ Accepted Answer</div>' : ''}
                     <div style="display: flex; flex-direction: column; align-items: center; min-width: 40px;">
                         <button class="btn-upvote-a" data-id="${a.id}" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: ${a.user_voted ? 'var(--accent-color)' : 'var(--text-muted)'}; transition: color 0.2s;">▲</button>
-                        <span style="font-size: 1.2rem; font-weight: bold; color: var(--text-color);">${a.upvotes}</span>
+                        <span style="font-size: 1.2rem; font-weight: bold; color: var(--text-color);">${a.upvotes || 0}</span>
                     </div>
                     <div style="flex: 1;">
                         <div style="font-size: 1rem; line-height: 1.6; color: var(--text-color); margin-bottom: 1rem; white-space: pre-wrap;">${a.content}</div>
@@ -257,7 +257,7 @@ Homeroom.pages.qna = {
             <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
                 <div style="display: flex; flex-direction: column; align-items: center; min-width: 40px;">
                     <button id="btn-upvote-q" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: ${q.user_voted ? 'var(--accent-color)' : 'var(--text-muted)'}; transition: transform 0.2s;">▲</button>
-                    <span style="font-size: 1.5rem; font-weight: bold; color: var(--text-color);">${q.upvotes}</span>
+                    <span style="font-size: 1.5rem; font-weight: bold; color: var(--text-color);">${q.upvotes || 0}</span>
                 </div>
                 <div style="flex: 1;">
                     <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">

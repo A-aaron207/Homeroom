@@ -94,7 +94,7 @@ Homeroom.pages.wallet = {
         try {
             const usersRes = await Homeroom.API.get('/users');
             if(!usersRes.success) throw new Error();
-            const users = usersRes.data.filter(u => u.id !== Homeroom.auth.user.id);
+            const users = usersRes.data.filter(u => u.id !== Homeroom.auth.user.id && (u.display_name || u.username));
             
             Homeroom.modal.open('Transfer Coins', `
                 <form id="transfer-form" action="javascript:void(0);" style="display: flex; flex-direction: column; gap: 1rem;">
@@ -102,7 +102,7 @@ Homeroom.pages.wallet = {
                         <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted);">Recipient</label>
                         <select name="recipientId" required style="width: 100%; padding: 1rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;">
                             <option value="" disabled selected>Select a user...</option>
-                            ${users.map(u => `<option value="${u.id}">${u.display_name} (@${u.username})</option>`).join('')}
+                            ${users.map(u => `<option value="${u.id}">${u.display_name || u.username} (@${u.username})</option>`).join('')}
                         </select>
                     </div>
                     <div>
@@ -208,8 +208,8 @@ Homeroom.pages.wallet = {
                           ${getIcon(t.category)}
                       </div>
                       <div>
-                          <div style="font-weight: bold; color: var(--text-color);">${t.description}</div>
-                          <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date(t.created_at).toLocaleString()}</div>
+                          <div style="font-weight: bold; color: var(--text-color);">${t.description || t.category || 'Transaction'}</div>
+                          <div style="font-size: 0.8rem; color: var(--text-muted);">${new Date((t.created_at || '').replace(' ', 'T')).toLocaleString()}</div>
                       </div>
                   </div>
                   <div style="font-weight: bold; font-size: 1.1rem; color: ${isPos ? '#22c55e' : '#ef4444'};">
